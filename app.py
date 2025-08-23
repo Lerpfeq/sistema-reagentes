@@ -1,19 +1,17 @@
 from flask import Flask, request, session, redirect
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 'reagentes-secret-2024'
 
-# Dados em memória (temporário)
+# Dados em memória
 reagentes_data = [
-    {'nome': 'Água Destilada', 'quantidade': 10.5},
-    {'nome': 'Álcool Etílico', 'quantidade': 5.0},
-    {'nome': 'Ácido Clorídrico', 'quantidade': 2.5}
+    {'id': 1, 'nome': 'Água Destilada', 'quantidade': 10.5},
+    {'id': 2, 'nome': 'Álcool Etílico', 'quantidade': 5.0},
+    {'id': 3, 'nome': 'Ácido Clorídrico', 'quantidade': 2.5}
 ]
 
-pedidos_data = [
-    {'reagente': 'Sódio', 'data': '2024-08-20', 'status': 'Pendente'},
-    {'reagente': 'Potássio', 'data': '2024-08-22', 'status': 'Entregue'}
-]
+pedidos_data = []
 
 @app.route('/')
 def home():
@@ -25,7 +23,64 @@ def home():
     <p>✅ Logado como: admin</p>
     <p><a href="/reagentes">📋 Ver Reagentes</a></p>
     <p><a href="/pedidos">📝 Ver Pedidos</a></p>
+    <p><a href="/novo-pedido">➕ Novo Pedido</a></p>
     <p><a href="/logout">Sair</a></p>
+    '''
+
+@app.route('/novo-pedido', methods=['GET', 'POST'])
+def novo_pedido():
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    if request.method == 'POST':
+        nome_reagente = request.form['nome_reagente']
+        data_pedido = request.form['data_pedido']
+        controlado = request.form['controlado']
+        
+        novo_pedido = {
+            'id': len(pedidos_data) + 1,
+            'reagente': nome_reagente,
+            'data': data_pedido,
+            'controlado': controlado,
+            'status': 'Pendente'
+        }
+        pedidos_data.append(novo_pedido)
+        
+        return f'''
+        <h2>✅ Pedido Criado!</h2>
+        <p>Reagente: {nome_reagente}</p>
+        <p>Data: {data_pedido}</p>
+        <p>Controlado: {controlado}</p>
+        <p><a href="/pedidos">Ver Todos os Pedidos</a></p>
+        <p><a href="/">Voltar ao Menu</a></p>
+        '''
+    
+    return '''
+    <div style="max-width:500px;margin:20px;padding:20px;border:1px solid #ccc;">
+        <h2>Pedido de Reagente</h2>
+        <form method="post">
+            <p>
+                <label>Nome do Reagente:</label><br>
+                <input type="text" name="nome_reagente" required style="width:300px;padding:5px;">
+            </p>
+            <p>
+                <label>Data do Pedido:</label><br>
+                <input type="date" name="data_pedido" required style="padding:5px;">
+            </p>
+            <p>
+                <label>Reagente Controlado?</label><br>
+                <select name="controlado" style="padding:5px;">
+                    <option value="Sim">Sim</option>
+                    <option value="Não" selected>Não</option>
+                </select>
+            </p>
+            <p>
+                <button type="submit" style="padding:8px 15px;background:green;color:white;">Salvar</button>
+                <button type="reset" style="padding:8px 15px;background:gray;color:white;">Fechar</button>
+            </p>
+        </form>
+        <p><a href="/">🏠 Voltar</a></p>
+    </div>
     '''
 
 @app.route('/reagentes')
@@ -46,8 +101,8 @@ def pedidos():
     
     html = '<h2>📝 Pedidos de Reagentes</h2><ul>'
     for p in pedidos_data:
-        html += f'<li><b>{p["reagente"]}</b> - {p["data"]} - Status: <em>{p["status"]}</em></li>'
-    html += '</ul><p><a href="/">🏠 Voltar</a></p>'
+        html += f'<li><b>{p["reagente"]}</b> - {p["data"]} - Controlado: {p["controlado"]} - Status: <em>{p["status"]}</em></li>'
+    html += '</ul><p><a href="/novo-pedido">➕ Novo Pedido</a></p><p><a href="/">🏠 Voltar</a></p>'
     return html
 
 @app.route('/login', methods=['GET', 'POST'])
