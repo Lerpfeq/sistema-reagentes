@@ -1,18 +1,19 @@
 from flask import Flask, request, session, redirect
-import sqlite3
-import os
 
 app = Flask(__name__)
 app.secret_key = 'reagentes-secret-2024'
 
-def init_db():
-    conn = sqlite3.connect('reagentes.db')
-    conn.execute('''CREATE TABLE IF NOT EXISTS reagentes 
-                    (id INTEGER PRIMARY KEY, nome TEXT, quantidade REAL)''')
-    conn.execute('''CREATE TABLE IF NOT EXISTS pedidos 
-                    (id INTEGER PRIMARY KEY, reagente TEXT, data TEXT, status TEXT)''')
-    conn.commit()
-    conn.close()
+# Dados em memória (temporário)
+reagentes_data = [
+    {'nome': 'Água Destilada', 'quantidade': 10.5},
+    {'nome': 'Álcool Etílico', 'quantidade': 5.0},
+    {'nome': 'Ácido Clorídrico', 'quantidade': 2.5}
+]
+
+pedidos_data = [
+    {'reagente': 'Sódio', 'data': '2024-08-20', 'status': 'Pendente'},
+    {'reagente': 'Potássio', 'data': '2024-08-22', 'status': 'Entregue'}
+]
 
 @app.route('/')
 def home():
@@ -32,14 +33,10 @@ def reagentes():
     if 'logged_in' not in session:
         return redirect('/login')
     
-    conn = sqlite3.connect('reagentes.db')
-    reagentes = conn.execute('SELECT * FROM reagentes').fetchall()
-    conn.close()
-    
-    html = '<h2>🧪 Reagentes</h2><ul>'
-    for r in reagentes:
-        html += f'<li>{r[1]} - Qtd: {r[2]}</li>'
-    html += '</ul><a href="/">Voltar</a>'
+    html = '<h2>🧪 Reagentes em Estoque</h2><ul>'
+    for r in reagentes_data:
+        html += f'<li><b>{r["nome"]}</b> - Quantidade: {r["quantidade"]}L</li>'
+    html += '</ul><p><a href="/">🏠 Voltar</a></p>'
     return html
 
 @app.route('/pedidos')
@@ -47,14 +44,10 @@ def pedidos():
     if 'logged_in' not in session:
         return redirect('/login')
     
-    conn = sqlite3.connect('reagentes.db')
-    pedidos = conn.execute('SELECT * FROM pedidos').fetchall()
-    conn.close()
-    
-    html = '<h2>📝 Pedidos</h2><ul>'
-    for p in pedidos:
-        html += f'<li>{p[1]} - {p[2]} - Status: {p[3]}</li>'
-    html += '</ul><a href="/">Voltar</a>'
+    html = '<h2>📝 Pedidos de Reagentes</h2><ul>'
+    for p in pedidos_data:
+        html += f'<li><b>{p["reagente"]}</b> - {p["data"]} - Status: <em>{p["status"]}</em></li>'
+    html += '</ul><p><a href="/">🏠 Voltar</a></p>'
     return html
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -68,13 +61,15 @@ def login():
             return redirect('/')
     
     return '''
-    <form method="post">
-        <h2>🔐 Login</h2>
-        Usuário: <input name="username" required><br><br>
-        Senha: <input type="password" name="password" required><br><br>
-        <button>Entrar</button>
-    </form>
-    <p>Use: admin / admin123</p>
+    <div style="max-width:400px;margin:50px auto;padding:20px;border:1px solid #ccc;">
+        <form method="post">
+            <h2>🔐 Login Sistema</h2>
+            <p>Usuário: <input name="username" required style="width:100%;padding:5px;"></p>
+            <p>Senha: <input type="password" name="password" required style="width:100%;padding:5px;"></p>
+            <button style="width:100%;padding:10px;background:blue;color:white;">Entrar</button>
+        </form>
+        <p><small>Use: admin / admin123</small></p>
+    </div>
     '''
 
 @app.route('/logout')
@@ -83,6 +78,6 @@ def logout():
     return redirect('/login')
 
 if __name__ == '__main__':
-    init_db()
+    import os
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
