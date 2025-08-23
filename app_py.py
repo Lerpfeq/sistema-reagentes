@@ -13,19 +13,10 @@ from src.routes.reagente_simple import reagente_bp
 def create_app():
     app = Flask(__name__)
     
-    # Configuração para produção
-    if os.environ.get('DATABASE_URL'):
-        # Heroku/Railway PostgreSQL
-        database_url = os.environ.get('DATABASE_URL')
-        if database_url.startswith('postgres://'):
-            database_url = database_url.replace('postgres://', 'postgresql://', 1)
-        app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-    else:
-        # Desenvolvimento local
-        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///reagentes.db'
-    
+    # Configuração SQLite - 100% GRATUITO PARA SEMPRE
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///reagentes.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'reagentes-lab-secret-key-2024')
     
     # Inicializar banco
     db.init_app(app)
@@ -51,7 +42,7 @@ def create_app():
     
     @app.route('/health')
     def health_check():
-        return {'status': 'healthy', 'message': 'Sistema de Reagentes Online!'}, 200
+        return {'status': 'healthy', 'message': 'Sistema de Reagentes Online - SQLite!'}, 200
     
     # Criar tabelas
     with app.app_context():
@@ -68,6 +59,7 @@ def create_app():
             admin.set_password('admin123')  # MUDE esta senha em produção!
             db.session.add(admin)
             db.session.commit()
+            print("✅ Usuário admin criado: admin / admin123")
     
     return app
 
