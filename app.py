@@ -3,13 +3,10 @@ from flask import Flask
 app = Flask(__name__)
 
 @app.route('/')
-def home():
-    return '''
-    <h1>🧪 Sistema de Reagentes</h1>
-    <p>✅ Funcionando com SQLite!</p>
-    <p><a href="/test">Testar funcionalidade</a></p>
-    '''
+def hello():
+    return '<h1>🧪 Sistema Funcionando!</h1>'
 
-@app.route('/test')
-def test():
-    return '<h2>✅ Sistema online!</h2><p>Pr
+if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
