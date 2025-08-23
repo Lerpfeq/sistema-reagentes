@@ -6,9 +6,9 @@ app.secret_key = 'reagentes-secret-2024'
 
 # Dados em memória
 reagentes_data = [
-    {'id': 1, 'nome': 'Água Destilada', 'volume_nominal': '1L', 'quantidade_embalagens': 10},
-    {'id': 2, 'nome': 'Álcool Etílico', 'volume_nominal': '500ml', 'quantidade_embalagens': 12},
-    {'id': 3, 'nome': 'Ácido Clorídrico', 'volume_nominal': '250ml', 'quantidade_embalagens': 8}
+    {'id': 1, 'nome': 'Água Destilada', 'volume_nominal': '1L', 'quantidade_embalagens': 10, 'marca': 'Synth'},
+    {'id': 2, 'nome': 'Álcool Etílico', 'volume_nominal': '500ml', 'quantidade_embalagens': 12, 'marca': 'Dinâmica'},
+    {'id': 3, 'nome': 'Ácido Clorídrico', 'volume_nominal': '250ml', 'quantidade_embalagens': 8, 'marca': 'Vetec'}
 ]
 
 pedidos_data = [
@@ -17,6 +17,7 @@ pedidos_data = [
 ]
 
 entradas_data = []
+saidas_data = []
 
 def get_pedidos_abertos():
     return [p for p in pedidos_data if p['status'] == 'Aberto']
@@ -27,11 +28,12 @@ def finalizar_pedido(pedido_id):
             p['status'] = 'Finalizado'
             break
 
-def atualizar_reagente_quantidade(nome_reagente, volume_nominal, quantidade_embalagens_adicionar):
-    # Procura reagente existente COM MESMO NOME E MESMO VOLUME NOMINAL
+def atualizar_reagente_quantidade(nome_reagente, volume_nominal, marca, quantidade_embalagens_adicionar):
+    # Procura reagente existente COM MESMO NOME, VOLUME E MARCA
     for r in reagentes_data:
         if (r['nome'].lower() == nome_reagente.lower() and 
-            r.get('volume_nominal', '').lower() == volume_nominal.lower()):
+            r.get('volume_nominal', '').lower() == volume_nominal.lower() and
+            r.get('marca', '').lower() == marca.lower()):
             r['quantidade_embalagens'] += quantidade_embalagens_adicionar
             return
     
@@ -41,6 +43,7 @@ def atualizar_reagente_quantidade(nome_reagente, volume_nominal, quantidade_emba
         'id': novo_id,
         'nome': nome_reagente,
         'volume_nominal': volume_nominal,
+        'marca': marca,
         'quantidade_embalagens': quantidade_embalagens_adicionar
     })
 
@@ -57,6 +60,8 @@ def home():
     <p><a href="/novo-pedido">➕ Novo Pedido</a></p>
     <p><a href="/entrada-reagente">📦 Entrada de Reagente</a></p>
     <p><a href="/entradas">📋 Ver Entradas</a></p>
+    <p><a href="/saida-reagente">➖ Saída de Reagente</a></p>
+    <p><a href="/saidas">📤 Ver Saídas</a></p>
     <p><a href="/logout">Sair</a></p>
     '''
 
@@ -98,14 +103,14 @@ def entrada_reagente():
         }
         entradas_data.append(nova_entrada)
         
-        # Atualizar quantidade do reagente (soma embalagens)
-        atualizar_reagente_quantidade(nome_reagente, volume_nominal, quantidade_embalagens)
+        # Atualizar quantidade do reagente (incluindo marca)
+        atualizar_reagente_quantidade(nome_reagente, volume_nominal, marca, quantidade_embalagens)
         
         return f'''
         <h2>✅ Entrada Registrada!</h2>
         <p>Reagente: <b>{nome_reagente}</b> ({volume_nominal})</p>
+        <p>Marca: <b>{marca}</b></p>
         <p>Quantidade: <b>{quantidade_embalagens} embalagens</b></p>
-        <p>Marca: {marca}</p>
         <p>Localização: {localizacao}</p>
         <p><a href="/entradas">📋 Ver Todas as Entradas</a></p>
         <p><a href="/reagentes">🧪 Ver Reagentes Atualizados</a></p>
@@ -161,7 +166,7 @@ def entrada_reagente():
             <p>
                 <label>Volume Nominal da Embalagem:</label><br>
                 <input type="text" name="volume_nominal" placeholder="Ex: 500ml, 1L, 250g, 2kg" required style="width:200px;padding:5px;">
-                <br><small style="color:blue;">💡 Reagentes só somam se Nome + Volume Nominal forem iguais</small>
+                <br><small style="color:blue;">💡 Reagentes só somam se Nome + Volume + Marca forem iguais</small>
             </p>
             
             <p>
@@ -212,6 +217,176 @@ def entrada_reagente():
     </script>
     '''
 
+@app.route('/saida-reagente', methods=['GET', 'POST'])
+def saida_reagente():
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    if request.method == 'POST':
+        nome_reagente = request.form['nome_reagente']
+        marca = request.form['marca']
+        volume_nominal = request.form['volume_nominal']
+        quantidade_saida = int(request.form['quantidade'])
+        
+        # Buscar reagente específico (nome + marca + volume)
+        reagente_encontrado = None
+        for r in reagentes_data:
+            if (r['nome'].lower() == nome_reagente.lower() and 
+                r.get('marca', '').lower() == marca.lower() and
+                r.get('volume_nominal', '').lower() == volume_nominal.lower()):
+                reagente_encontrado = r
+                break
+        
+        if not reagente_encontrado:
+            return f'''
+            <h2>❌ Erro!</h2>
+            <p>Reagente não encontrado no estoque.</p>
+            <p><a href="/saida-reagente">Tentar novamente</a></p>
+            <p><a href="/">Voltar ao Menu</a></p>
+            '''
+        
+        # Verificar se tem quantidade suficiente
+        if quantidade_saida > reagente_encontrado['quantidade_embalagens']:
+            return f'''
+            <h2>❌ Quantidade Insuficiente!</h2>
+            <p>Reagente: <b>{nome_reagente}</b></p>
+            <p>Marca: <b>{marca}</b> - Volume: <b>{volume_nominal}</b></p>
+            <p>Disponível: <b>{reagente_encontrado['quantidade_embalagens']} embalagens</b></p>
+            <p>Solicitado: <b>{quantidade_saida} embalagens</b></p>
+            <p><a href="/saida-reagente">Tentar novamente</a></p>
+            <p><a href="/">Voltar ao Menu</a></p>
+            '''
+        
+        # Registrar saída
+        nova_saida = {
+            'id': len(saidas_data) + 1,
+            'data_saida': datetime.now().strftime('%Y-%m-%d'),
+            'nome_reagente': nome_reagente,
+            'marca': marca,
+            'volume_nominal': volume_nominal,
+            'quantidade_saida': quantidade_saida,
+            'usuario': 'admin'
+        }
+        saidas_data.append(nova_saida)
+        
+        # Abater do estoque
+        reagente_encontrado['quantidade_embalagens'] -= quantidade_saida
+        
+        # Se zerou, remover do estoque
+        if reagente_encontrado['quantidade_embalagens'] <= 0:
+            reagentes_data.remove(reagente_encontrado)
+            status_estoque = "❌ Reagente ZERADO - Removido do estoque"
+        else:
+            status_estoque = f"✅ Restam {reagente_encontrado['quantidade_embalagens']} embalagens"
+        
+        return f'''
+        <h2>✅ Saída Registrada!</h2>
+        <p>Reagente: <b>{nome_reagente}</b></p>
+        <p>Marca: <b>{marca}</b></p>
+        <p>Volume: <b>{volume_nominal}</b></p>
+        <p>Quantidade retirada: <b>{quantidade_saida} embalagens</b></p>
+        <p>{status_estoque}</p>
+        <p><a href="/saidas">📤 Ver Todas as Saídas</a></p>
+        <p><a href="/reagentes">🧪 Ver Estoque Atualizado</a></p>
+        <p><a href="/">🏠 Voltar ao Menu</a></p>
+        '''
+    
+    # Criar dados JavaScript dos reagentes para busca dinâmica
+    reagentes_js = str(reagentes_data).replace("'", '"')
+    
+    return f'''
+    <div style="max-width:500px;margin:20px;padding:20px;border:1px solid #ccc;">
+        <h2>Saída de Reagente</h2>
+        <form method="post" id="saidaForm">
+            <p>
+                <label>Nome do Reagente:</label><br>
+                <input type="text" name="nome_reagente" id="nomeReagente" oninput="buscarMarcas()" required style="width:300px;padding:5px;">
+            </p>
+            
+            <p>
+                <label>Marca:</label><br>
+                <select name="marca" id="marcaSelect" onchange="buscarVolumes()" required style="padding:5px;width:200px;">
+                    <option>Selecione uma marca</option>
+                </select>
+            </p>
+            
+            <p>
+                <label>Volume da Embalagem:</label><br>
+                <select name="volume_nominal" id="volumeSelect" required style="padding:5px;width:200px;">
+                    <option>Selecione um volume</option>
+                </select>
+            </p>
+            
+            <p>
+                <label>Quantidade:</label><br>
+                <input type="number" name="quantidade" min="1" required style="width:100px;padding:5px;">
+            </p>
+            
+            <p>
+                <button type="submit" style="padding:8px 15px;background:red;color:white;">Registrar Saída</button>
+                <button type="reset" style="padding:8px 15px;background:gray;color:white;" onclick="limparSelects()">Fechar</button>
+            </p>
+        </form>
+        <p><a href="/">🏠 Voltar</a></p>
+    </div>
+    
+    <script>
+    var reagentes = {reagentes_js};
+    
+    function limparSelects() {{
+        document.getElementById('marcaSelect').innerHTML = '<option>Selecione uma marca</option>';
+        document.getElementById('volumeSelect').innerHTML = '<option>Selecione um volume</option>';
+    }}
+    
+    function buscarMarcas() {{
+        var nome = document.getElementById('nomeReagente').value.toLowerCase();
+        var marcaSelect = document.getElementById('marcaSelect');
+        var volumeSelect = document.getElementById('volumeSelect');
+        
+        // Limpar selects
+        marcaSelect.innerHTML = '<option>Selecione uma marca</option>';
+        volumeSelect.innerHTML = '<option>Selecione um volume</option>';
+        
+        if (nome.length < 2) return;
+        
+        // Buscar marcas do reagente
+        var marcasEncontradas = [];
+        
+        reagentes.forEach(function(r) {{
+            if (r.nome.toLowerCase().includes(nome)) {{
+                var marca = r.marca || 'Marca não informada';
+                if (marcasEncontradas.indexOf(marca) === -1) {{
+                    marcasEncontradas.push(marca);
+                    var option = document.createElement('option');
+                    option.value = marca;
+                    option.text = marca;
+                    marcaSelect.add(option);
+                }}
+            }}
+        }});
+    }}
+    
+    function buscarVolumes() {{
+        var nome = document.getElementById('nomeReagente').value.toLowerCase();
+        var marca = document.getElementById('marcaSelect').value;
+        var volumeSelect = document.getElementById('volumeSelect');
+        
+        volumeSelect.innerHTML = '<option>Selecione um volume</option>';
+        
+        if (!nome || !marca || marca === 'Selecione uma marca') return;
+        
+        reagentes.forEach(function(r) {{
+            if (r.nome.toLowerCase().includes(nome) && (r.marca || 'Marca não informada') === marca) {{
+                var option = document.createElement('option');
+                option.value = r.volume_nominal;
+                option.text = r.volume_nominal + ' (' + r.quantidade_embalagens + ' disponíveis)';
+                volumeSelect.add(option);
+            }}
+        }});
+    }}
+    </script>
+    '''
+
 @app.route('/entradas')
 def entradas():
     if 'logged_in' not in session:
@@ -219,7 +394,7 @@ def entradas():
     
     html = '<h2>📦 Entradas de Reagentes</h2>'
     html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>Data</th><th>Reagente</th><th>Volume/Massa Nominal</th><th>Marca</th><th>Qtd Embalagens</th><th>Localização</th><th>Controlado</th><th>Validade</th></tr>'
+    html += '<tr><th>Data</th><th>Reagente</th><th>Marca</th><th>Volume/Massa</th><th>Qtd Emb.</th><th>Localização</th><th>Controlado</th><th>Validade</th></tr>'
     
     for e in entradas_data:
         validade = e.get('data_validade', '') or 'N/A'
@@ -227,9 +402,9 @@ def entradas():
         html += f'<tr>'
         html += f'<td>{e["data_chegada"]}</td>'
         html += f'<td><b>{e["nome_reagente"]}</b></td>'
-        html += f'<td>{e["volume_nominal"]}</td>'
         html += f'<td>{e["marca"]}</td>'
-        html += f'<td><b>{e["quantidade_embalagens"]} embalagens</b></td>'
+        html += f'<td>{e["volume_nominal"]}</td>'
+        html += f'<td><b>{e["quantidade_embalagens"]}</b></td>'
         html += f'<td>{e["localizacao"]}</td>'
         html += f'<td style="color:{controlado_cor}"><b>{e.get("controlado", "Não")}</b></td>'
         html += f'<td>{validade}</td>'
@@ -237,6 +412,30 @@ def entradas():
     
     html += '</table>'
     html += '<p><a href="/entrada-reagente">➕ Nova Entrada</a></p>'
+    html += '<p><a href="/">🏠 Voltar</a></p>'
+    return html
+
+@app.route('/saidas')
+def saidas():
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    html = '<h2>📤 Saídas de Reagentes</h2>'
+    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html += '<tr><th>Data</th><th>Reagente</th><th>Marca</th><th>Volume</th><th>Qtd Retirada</th><th>Usuário</th></tr>'
+    
+    for s in saidas_data:
+        html += f'<tr>'
+        html += f'<td>{s["data_saida"]}</td>'
+        html += f'<td><b>{s["nome_reagente"]}</b></td>'
+        html += f'<td>{s["marca"]}</td>'
+        html += f'<td>{s["volume_nominal"]}</td>'
+        html += f'<td><b style="color:red">{s["quantidade_saida"]} embalagens</b></td>'
+        html += f'<td>{s["usuario"]}</td>'
+        html += f'</tr>'
+    
+    html += '</table>'
+    html += '<p><a href="/saida-reagente">➖ Nova Saída</a></p>'
     html += '<p><a href="/">🏠 Voltar</a></p>'
     return html
 
@@ -248,18 +447,20 @@ def reagentes():
     html = '<h2>🧪 Reagentes em Estoque</h2>'
     html += '<p><small>📦 <strong>Quantidade</strong> = Número total de embalagens</small></p>'
     html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>Nome do Reagente</th><th>Volume/Massa Nominal</th><th>Quantidade Total</th></tr>'
+    html += '<tr><th>Nome do Reagente</th><th>Marca</th><th>Volume/Massa Nominal</th><th>Quantidade Total</th></tr>'
     
     for r in reagentes_data:
         volume = r.get('volume_nominal', 'N/A')
+        marca = r.get('marca', 'N/A')
         html += f'<tr>'
         html += f'<td><b>{r["nome"]}</b></td>'
+        html += f'<td>{marca}</td>'
         html += f'<td>{volume}</td>'
         html += f'<td><b>{r["quantidade_embalagens"]} embalagens</b></td>'
         html += f'</tr>'
     
     html += '</table>'
-    html += '<p><small>💡 Exemplo: 10 embalagens de 500ml = 10 frascos de 500ml cada</small></p>'
+    html += '<p><small>💡 Reagentes são somados apenas se Nome + Marca + Volume forem iguais</small></p>'
     html += '<p><a href="/">🏠 Voltar</a></p>'
     return html
 
