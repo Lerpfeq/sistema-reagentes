@@ -1,14 +1,15 @@
 from flask import Flask, request, session, redirect
 from datetime import datetime
+import re
 
 app = Flask(__name__)
 app.secret_key = 'reagentes-secret-2024'
 
 # Dados em memória
 reagentes_data = [
-    {'id': 1, 'nome': 'Água Destilada', 'volume_nominal': '1L', 'quantidade_total': 10.5},
-    {'id': 2, 'nome': 'Álcool Etílico', 'volume_nominal': '500ml', 'quantidade_total': 5.0},
-    {'id': 3, 'nome': 'Ácido Clorídrico', 'volume_nominal': '250ml', 'quantidade_total': 2.5}
+    {'id': 1, 'nome': 'Água Destilada', 'volume_nominal': '1L', 'quantidade_total': 10.5, 'tipo_unidade': 'volume'},
+    {'id': 2, 'nome': 'Álcool Etílico', 'volume_nominal': '500ml', 'quantidade_total': 5.0, 'tipo_unidade': 'volume'},
+    {'id': 3, 'nome': 'Ácido Clorídrico', 'volume_nominal': '250ml', 'quantidade_total': 2.5, 'tipo_unidade': 'volume'}
 ]
 
 pedidos_data = [
@@ -17,6 +18,68 @@ pedidos_data = [
 ]
 
 entradas_data = []
+
+def detectar_tipo_unidade(volume_nominal):
+    """Detecta se é volume (L) ou massa (g)"""
+    unidade = volume_nominal.lower()
+    
+    # Unidades de volume
+    if any(u in unidade for u in ['ml', 'l', 'ul', 'dl', 'cl']):
+        return 'volume'
+    
+    # Unidades de massa
+    if any(u in unidade for u in ['g', 'kg', 'mg', 'ug']):
+        return 'massa'
+    
+    # Default: assumir volume
+    return 'volume'
+
+def converter_para_unidade_base(volume_nominal, quantidade_embalagens):
+    """Converte para unidade base: L para volume, g para massa"""
+    try:
+        # Extrair número
+        numeros = re.findall(r'\d+\.?\d*', volume_nominal.replace(',', '.'))
+        if not numeros:
+            return quantidade_embalagens, 'unidade'
+        
+        valor = float(numeros[0])
+        unidade = volume_nominal.lower().replace(str(valor), '').replace(',', '').replace('.', '').strip()
+        
+        # CONVERSÕES DE VOLUME (para Litros)
+        conversoes_volume = {
+            'ul': 0.000001,  # microlitro
+            'ml': 0.001,     # mililitro
+            'cl': 0.01,      # centilitro
+            'dl': 0.1,       # decilitro
+            'l': 1.0,        # litro
+        }
+        
+        # CONVERSÕES DE MASSA (para gramas)
+        conversoes_massa = {
+            'ug': 0.000001,  # micrograma
+            'mg': 0.001,     # miligrama
+            'g': 1.0,        # grama
+            'kg': 1000.0,    # quilograma
+        }
+        
+        # Detectar tipo
+        if any(u in unidade for u in conversoes_volume.keys()):
+            # É volume - converter para L
+            fator = conversoes_volume.get(unidade, 1.0)
+            total = valor * fator * quantidade_embalagens
+            return total, 'L'
+            
+        elif any(u in unidade for u in conversoes_massa.keys()):
+            # É massa - converter para g
+            fator = conversoes_massa.get(unidade, 1.0)
+            total = valor * fator * quantidade_embalagens
+            return total, 'g'
+        
+        # Fallback
+        return valor * quantidade_embalagens, unidade
+        
+    except:
+        return quantidade_embalagens, 'unidade'
 
 def get_pedidos_abertos():
     return [p for p in pedidos_data if p['status'] == 'Aberto']
@@ -27,7 +90,7 @@ def finalizar_pedido(pedido_id):
             p['status'] = 'Finalizado'
             break
 
-def atualizar_reagente_quantidade(nome_reagente, volume_nominal, quantidade_adicionar):
+def atualizar_reagente_quantidade(nome_reagente, volume_nominal, quantidade_adicionar, tipo_unidade, unidade_base):
     for r in reagentes_data:
         if (r['nome'].lower() == nome_reagente.lower() and 
             r.get('volume_nominal', '').lower() == volume_nominal.lower()):
@@ -39,7 +102,9 @@ def atualizar_reagente_quantidade(nome_reagente, volume_nominal, quantidade_adic
         'id': novo_id,
         'nome': nome_reagente,
         'volume_nominal': volume_nominal,
-        'quantidade_total': quantidade_adicionar
+        'quantidade_total': quantidade_adicionar,
+        'tipo_unidade': tipo_unidade,
+        'unidade_base': unidade_base
     })
 
 @app.route('/')
@@ -73,11 +138,9 @@ def entrada_reagente():
         controlado = request.form['controlado']
         data_validade = request.form.get('data_validade', '')
         
-        try:
-            volume_num = float(''.join(filter(str.isdigit, volume_nominal.replace(',', '.'))))
-            quantidade_total = volume_num * quantidade_embalagens / 1000
-        except:
-            quantidade_total = quantidade_embalagens
+        # Calcular quantidade total com conversão correta
+        quantidade_total, unidade_base = converter_para_unidade_base(volume_nominal, quantidade_embalagens)
+        tipo_unidade = detectar_tipo_unidade(volume_nominal)
         
         if pedido_feito == 'Sim':
             pedido_id = int(request.form['pedido_selecionado'])
@@ -96,6 +159,7 @@ def entrada_reagente():
             'volume_nominal': volume_nominal,
             'quantidade_embalagens': quantidade_embalagens,
             'quantidade_total': quantidade_total,
+            'unidade_base': unidade_base,
             'localizacao': localizacao,
             'controlado': controlado,
             'data_validade': data_validade,
@@ -103,15 +167,16 @@ def entrada_reagente():
         }
         entradas_data.append(nova_entrada)
         
-        atualizar_reagente_quantidade(nome_reagente, volume_nominal, quantidade_total)
+        atualizar_reagente_quantidade(nome_reagente, volume_nominal, quantidade_total, tipo_unidade, unidade_base)
         
         return f'''
         <h2>✅ Entrada Registrada!</h2>
         <p>Reagente: {nome_reagente} ({volume_nominal})</p>
         <p>Quantidade: {quantidade_embalagens} embalagens</p>
-        <p>Total: {quantidade_total:.2f} L/Kg</p>
+        <p>Total: {quantidade_total:.2f} {unidade_base}</p>
         <p>Localização: {localizacao}</p>
         <p><a href="/entradas">Ver Todas as Entradas</a></p>
+        <p><a href="/reagentes">Ver Reagentes Atualizados</a></p>
         <p><a href="/">Voltar ao Menu</a></p>
         '''
     
@@ -163,7 +228,8 @@ def entrada_reagente():
             
             <p>
                 <label>Volume Nominal da Embalagem:</label><br>
-                <input type="text" name="volume_nominal" placeholder="Ex: 500ml, 1L, 250g" required style="width:200px;padding:5px;">
+                <input type="text" name="volume_nominal" placeholder="Ex: 500ml, 1L, 250g, 2kg" required style="width:200px;padding:5px;">
+                <br><small style="color:blue;">💡 Volume: ul, ml, cl, dl, L | Massa: ug, mg, g, kg</small>
             </p>
             
             <p>
@@ -221,23 +287,54 @@ def entradas():
     
     html = '<h2>📦 Entradas de Reagentes</h2>'
     html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>Data</th><th>Reagente</th><th>Volume</th><th>Marca</th><th>Qtd Emb.</th><th>Total</th><th>Localização</th><th>Validade</th></tr>'
+    html += '<tr><th>Data</th><th>Reagente</th><th>Volume/Massa</th><th>Marca</th><th>Qtd Emb.</th><th>Total</th><th>Localização</th><th>Validade</th></tr>'
     
     for e in entradas_data:
         validade = e.get('data_validade', '') or 'N/A'
+        unidade = e.get('unidade_base', 'unidade')
         html += f'<tr>'
         html += f'<td>{e["data_chegada"]}</td>'
         html += f'<td><b>{e["nome_reagente"]}</b></td>'
         html += f'<td>{e["volume_nominal"]}</td>'
         html += f'<td>{e["marca"]}</td>'
         html += f'<td>{e["quantidade_embalagens"]}</td>'
-        html += f'<td>{e["quantidade_total"]:.2f}L</td>'
+        html += f'<td>{e["quantidade_total"]:.2f} {unidade}</td>'
         html += f'<td>{e["localizacao"]}</td>'
         html += f'<td>{validade}</td>'
         html += f'</tr>'
     
     html += '</table>'
     html += '<p><a href="/entrada-reagente">➕ Nova Entrada</a></p>'
+    html += '<p><a href="/">🏠 Voltar</a></p>'
+    return html
+
+@app.route('/reagentes')
+def reagentes():
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    html = '<h2>🧪 Reagentes em Estoque</h2>'
+    html += '<p><small>📊 Volumes em <strong>L</strong> | Massas em <strong>g</strong></small></p>'
+    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html += '<tr><th>Nome</th><th>Volume/Massa Nominal</th><th>Quantidade Total</th><th>Tipo</th></tr>'
+    
+    for r in reagentes_data:
+        volume = r.get('volume_nominal', 'N/A')
+        unidade_base = r.get('unidade_base', 'L')
+        tipo_unidade = r.get('tipo_unidade', 'volume')
+        
+        # Ícone baseado no tipo
+        icone_tipo = '🧪' if tipo_unidade == 'volume' else '⚖️'
+        
+        html += f'<tr>'
+        html += f'<td><b>{r["nome"]}</b></td>'
+        html += f'<td>{volume}</td>'
+        html += f'<td><strong>{r["quantidade_total"]:.2f} {unidade_base}</strong></td>'
+        html += f'<td>{icone_tipo} {tipo_unidade.title()}</td>'
+        html += f'</tr>'
+    
+    html += '</table>'
+    html += '<p><small>💡 <strong>L</strong> = Litros | <strong>g</strong> = Gramas</small></p>'
     html += '<p><a href="/">🏠 Voltar</a></p>'
     return html
 
@@ -281,7 +378,7 @@ def novo_pedido():
             </p>
             <p>
                 <label>Quantidade Nominal:</label><br>
-                <input type="text" name="quantidade_nominal" placeholder="Ex: 500ml, 1L, 250g" required style="width:200px;padding:5px;">
+                <input type="text" name="quantidade_nominal" placeholder="Ex: 500ml, 1L, 250g, 2kg" required style="width:200px;padding:5px;">
             </p>
             <p>
                 <label>Data do Pedido:</label><br>
@@ -302,27 +399,6 @@ def novo_pedido():
         <p><a href="/">🏠 Voltar</a></p>
     </div>
     '''
-
-@app.route('/reagentes')
-def reagentes():
-    if 'logged_in' not in session:
-        return redirect('/login')
-    
-    html = '<h2>🧪 Reagentes em Estoque</h2>'
-    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>Nome</th><th>Volume Nominal</th><th>Quantidade Total</th></tr>'
-    
-    for r in reagentes_data:
-        volume = r.get('volume_nominal', 'N/A')
-        html += f'<tr>'
-        html += f'<td><b>{r["nome"]}</b></td>'
-        html += f'<td>{volume}</td>'
-        html += f'<td>{r["quantidade_total"]:.2f}L</td>'
-        html += f'</tr>'
-    
-    html += '</table>'
-    html += '<p><a href="/">🏠 Voltar</a></p>'
-    return html
 
 @app.route('/pedidos')
 def pedidos():
@@ -379,3 +455,4 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+    
