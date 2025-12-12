@@ -999,6 +999,103 @@ def relatorio():
     </div>
     '''
 
+@app.route('/novo-pedido', methods=['GET', 'POST'])
+def novo_pedido():
+    """Criar um novo pedido de reagente."""
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    if request.method == 'POST':
+        nome_reagente = request.form['nome_reagente']
+        data_pedido = request.form['data_pedido']
+        controlado = request.form['controlado']
+        quantidade_nominal = request.form['quantidade_nominal']
+        
+        novo_pedido = {
+            'id': len(pedidos_data) + 1,
+            'reagente': nome_reagente,
+            'data': data_pedido,
+            'controlado': controlado,
+            'quantidade_nominal': quantidade_nominal,
+            'status': 'Aberto'
+        }
+        pedidos_data.append(novo_pedido)
+        
+        return f'''
+        <h2>✅ Pedido Criado!</h2>
+        <p>Reagente: <b>{nome_reagente}</b></p>
+        <p>Quantidade: <b>{quantidade_nominal}</b></p>
+        <p>Data: {data_pedido}</p>
+        <p>Controlado: {controlado}</p>
+        <p><a href="/pedidos">📝 Ver Todos os Pedidos</a></p>
+        <p><a href="/">🏠 Voltar ao Menu</a></p>
+        '''
+    
+    return '''
+    <div style="max-width:500px;margin:20px;padding:20px;border:1px solid #ccc;border-radius:5px;">
+        <h2>📝 Novo Pedido de Reagente</h2>
+        <form method="post">
+            <p>
+                <label><strong>Nome do Reagente:</strong></label><br>
+                <input type="text" name="nome_reagente" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+            </p>
+            <p>
+                <label><strong>Quantidade Nominal:</strong></label><br>
+                <input type="text" name="quantidade_nominal" placeholder="Ex: 500ml, 1L, 250g, 2kg" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+            </p>
+            <p>
+                <label><strong>Data do Pedido:</strong></label><br>
+                <input type="date" name="data_pedido" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+            </p>
+            <p>
+                <label><strong>Reagente Controlado?</strong></label><br>
+                <select name="controlado" style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+                    <option value="Sim">Sim</option>
+                    <option value="Não" selected>Não</option>
+                </select>
+            </p>
+            <p>
+                <button type="submit" style="padding:10px 20px;background:green;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">✅ Salvar Pedido</button>
+                <button type="reset" style="padding:10px 20px;background:gray;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;margin-left:10px;">🔄 Limpar</button>
+            </p>
+        </form>
+        <p><a href="/">🏠 Voltar</a></p>
+    </div>
+    '''
+
+@app.route('/pedidos')
+def pedidos():
+    """Visualizar todos os pedidos."""
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    html = '<div style="margin:20px;padding:20px;">'
+    html += '<h2>📝 Pedidos de Reagentes</h2>'
+    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html += '<tr style="background-color:#f0f0f0;"><th>ID</th><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
+    
+    if pedidos_data:
+        for p in pedidos_data:
+            status_cor = 'green' if p['status'] == 'Finalizado' else 'orange'
+            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
+            status_emoji = '✅' if p['status'] == 'Finalizado' else '⏳'
+            html += f'<tr>'
+            html += f'<td><b>#{p["id"]}</b></td>'
+            html += f'<td><b>{p["reagente"]}</b></td>'
+            html += f'<td>{p["quantidade_nominal"]}</td>'
+            html += f'<td>{p["data"]}</td>'
+            html += f'<td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td>'
+            html += f'<td style="color:{status_cor};"><b>{status_emoji} {p["status"]}</b></td>'
+            html += f'</tr>'
+    else:
+        html += '<tr><td colspan="6" style="text-align:center;color:gray;">Nenhum pedido registrado</td></tr>'
+    
+    html += '</table>'
+    html += '<p style="margin-top:20px;"><a href="/novo-pedido">➕ Novo Pedido</a></p>'
+    html += '<p><a href="/">🏠 Voltar ao Menu</a></p>'
+    html += '</div>'
+    return html
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Página de login do sistema."""
