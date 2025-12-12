@@ -47,6 +47,189 @@ def atualizar_reagente_quantidade(nome_reagente, volume_nominal, marca, quantida
         'quantidade_embalagens': quantidade_embalagens_adicionar
     })
 
+# ============================================================================
+# FUNÇÕES DE CONSULTA AVANÇADA
+# ============================================================================
+
+def consultar_reagentes(filtro_tipo='', filtro_valor=''):
+    """
+    Consulta reagentes com múltiplos filtros.
+    
+    Tipos de filtro:
+    - 'nome': busca por nome (contém)
+    - 'marca': busca por marca exata
+    - 'volume': busca por volume (contém)
+    - 'quantidade_min': quantidade mínima em estoque
+    - 'quantidade_max': quantidade máxima em estoque
+    - 'critico': mostra apenas reagentes com estoque crítico (< 5 embalagens)
+    - 'zerado': mostra apenas reagentes zerados
+    - 'todos': retorna todos
+    
+    Returns: lista de reagentes que atendem aos critérios
+    """
+    resultados = []
+    
+    if not filtro_tipo or filtro_tipo == 'todos':
+        return reagentes_data
+    
+    for r in reagentes_data:
+        match = False
+        
+        if filtro_tipo == 'nome':
+            if filtro_valor.lower() in r['nome'].lower():
+                match = True
+        
+        elif filtro_tipo == 'marca':
+            if r.get('marca', '').lower() == filtro_valor.lower():
+                match = True
+        
+        elif filtro_tipo == 'volume':
+            if filtro_valor.lower() in r.get('volume_nominal', '').lower():
+                match = True
+        
+        elif filtro_tipo == 'quantidade_min':
+            try:
+                if r['quantidade_embalagens'] >= int(filtro_valor):
+                    match = True
+            except ValueError:
+                pass
+        
+        elif filtro_tipo == 'quantidade_max':
+            try:
+                if r['quantidade_embalagens'] <= int(filtro_valor):
+                    match = True
+            except ValueError:
+                pass
+        
+        elif filtro_tipo == 'critico':
+            if r['quantidade_embalagens'] < 5:
+                match = True
+        
+        elif filtro_tipo == 'zerado':
+            if r['quantidade_embalagens'] <= 0:
+                match = True
+        
+        if match:
+            resultados.append(r)
+    
+    return resultados
+
+
+def consultar_por_multiplos_filtros(nome=None, marca=None, volume=None, 
+                                   estoque_min=None, estoque_max=None):
+    """
+    Consulta com múltiplos filtros simultâneos (AND logic).
+    Todos os filtros fornecidos devem ser atendidos.
+    
+    Args:
+        nome: substring do nome do reagente
+        marca: marca exata (case-insensitive)
+        volume: substring do volume/massa
+        estoque_min: quantidade mínima de embalagens
+        estoque_max: quantidade máxima de embalagens
+    
+    Returns: lista de reagentes que atendem a TODOS os critérios
+    """
+    resultados = reagentes_data
+    
+    if nome:
+        resultados = [r for r in resultados 
+                     if nome.lower() in r['nome'].lower()]
+    
+    if marca:
+        resultados = [r for r in resultados 
+                     if r.get('marca', '').lower() == marca.lower()]
+    
+    if volume:
+        resultados = [r for r in resultados 
+                     if volume.lower() in r.get('volume_nominal', '').lower()]
+    
+    if estoque_min is not None:
+        try:
+            min_val = int(estoque_min)
+            resultados = [r for r in resultados 
+                         if r['quantidade_embalagens'] >= min_val]
+        except (ValueError, TypeError):
+            pass
+    
+    if estoque_max is not None:
+        try:
+            max_val = int(estoque_max)
+            resultados = [r for r in resultados 
+                         if r['quantidade_embalagens'] <= max_val]
+        except (ValueError, TypeError):
+            pass
+    
+    return resultados
+
+
+def gerar_relatorio_estoque():
+    """Gera um relatório completo do estoque com estatísticas."""
+    total_itens = len(reagentes_data)
+    total_embalagens = sum(r['quantidade_embalagens'] for r in reagentes_data)
+    criticos = [r for r in reagentes_data if r['quantidade_embalagens'] < 5]
+    zerados = [r for r in reagentes_data if r['quantidade_embalagens'] <= 0]
+    
+    return {
+        'total_itens': total_itens,
+        'total_embalagens': total_embalagens,
+        'itens_criticos': criticos,
+        'itens_zerados': zerados,
+        'media_embalagens': round(total_embalagens / total_itens, 2) if total_itens > 0 else 0,
+        'item_com_maior_estoque': max(reagentes_data, key=lambda x: x['quantidade_embalagens']) if reagentes_data else None
+    }
+
+
+def consultar_entradas_por_periodo(data_inicio, data_fim):
+    """
+    Consulta entradas em um período específico.
+    
+    Args:
+        data_inicio: string no formato 'YYYY-MM-DD'
+        data_fim: string no formato 'YYYY-MM-DD'
+    
+    Returns: lista de entradas no período
+    """
+    try:
+        inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
+        fim = datetime.strptime(data_fim, '%Y-%m-%d')
+    except ValueError:
+        return []
+    
+    resultados = []
+    for e in entradas_data:
+        try:
+            data_entrada = datetime.strptime(e['data_chegada'], '%Y-%m-%d')
+            if inicio <= data_entrada <= fim:
+                resultados.append(e)
+        except ValueError:
+            pass
+    
+    return resultados
+
+
+def consultar_saidas_por_reagente(nome_reagente):
+    """Retorna todas as saídas de um reagente específico."""
+    return [s for s in saidas_data 
+            if s['nome_reagente'].lower() == nome_reagente.lower()]
+
+
+def consultar_estoque_por_marca():
+    """Retorna um dicionário agrupando reagentes por marca."""
+    por_marca = {}
+    
+    for r in reagentes_data:
+        marca = r.get('marca', 'Sem marca informada')
+        if marca not in por_marca:
+            por_marca[marca] = []
+        por_marca[marca].append(r)
+    
+    return por_marca
+
+# ============================================================================
+# ROTAS
+# ============================================================================
+
 @app.route('/')
 def home():
     if 'logged_in' not in session:
@@ -56,6 +239,8 @@ def home():
     <h1>🧪 Sistema de Reagentes</h1>
     <p>✅ Logado como: admin</p>
     <p><a href="/reagentes">📋 Ver Reagentes</a></p>
+    <p><a href="/consulta">🔍 Consultar Reagentes</a></p>
+    <p><a href="/relatorio">📊 Relatório de Estoque</a></p>
     <p><a href="/pedidos">📝 Ver Pedidos</a></p>
     <p><a href="/novo-pedido">➕ Novo Pedido</a></p>
     <p><a href="/entrada-reagente">📦 Entrada de Reagente</a></p>
@@ -63,6 +248,152 @@ def home():
     <p><a href="/saida-reagente">➖ Saída de Reagente</a></p>
     <p><a href="/saidas">📤 Ver Saídas</a></p>
     <p><a href="/logout">Sair</a></p>
+    '''
+
+@app.route('/consulta', methods=['GET', 'POST'])
+def consulta():
+    """Página de consulta avançada de reagentes."""
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    resultados = []
+    filtro_aplicado = False
+    
+    if request.method == 'POST':
+        filtro_tipo = request.form.get('filtro_tipo', '')
+        filtro_valor = request.form.get('filtro_valor', '')
+        
+        if filtro_tipo and filtro_valor:
+            resultados = consultar_reagentes(filtro_tipo, filtro_valor)
+            filtro_aplicado = True
+    
+    # Construir tabela HTML
+    html_tabela = '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html_tabela += '<tr style="background-color:#f0f0f0;"><th>Nome</th><th>Marca</th><th>Volume/Massa</th><th>Quantidade</th></tr>'
+    
+    if resultados:
+        for r in resultados:
+            volume = r.get('volume_nominal', 'N/A')
+            marca = r.get('marca', 'N/A')
+            qtd_cor = 'red' if r['quantidade_embalagens'] < 5 else 'green'
+            html_tabela += f'<tr>'
+            html_tabela += f'<td><b>{r["nome"]}</b></td>'
+            html_tabela += f'<td>{marca}</td>'
+            html_tabela += f'<td>{volume}</td>'
+            html_tabela += f'<td style="color:{qtd_cor};"><b>{r["quantidade_embalagens"]}</b></td>'
+            html_tabela += f'</tr>'
+    else:
+        if filtro_aplicado:
+            html_tabela += '<tr><td colspan="4" style="text-align:center;color:red;">❌ Nenhum reagente encontrado</td></tr>'
+        else:
+            html_tabela += '<tr><td colspan="4" style="text-align:center;color:gray;">Realize uma busca para ver resultados</td></tr>'
+    
+    html_tabela += '</table>'
+    
+    return f'''
+    <div style="max-width:700px;margin:20px;padding:20px;border:1px solid #ccc;">
+        <h2>🔍 Consultar Reagentes</h2>
+        
+        <form method="post">
+            <p>
+                <label>Tipo de Filtro:</label><br>
+                <select name="filtro_tipo" required style="padding:8px;width:300px;">
+                    <option value="">-- Selecione um filtro --</option>
+                    <option value="nome">Por Nome</option>
+                    <option value="marca">Por Marca</option>
+                    <option value="volume">Por Volume/Massa</option>
+                    <option value="quantidade_min">Quantidade Mínima</option>
+                    <option value="quantidade_max">Quantidade Máxima</option>
+                    <option value="critico">Estoque Crítico (&lt; 5)</option>
+                    <option value="zerado">Estoque Zerado</option>
+                </select>
+            </p>
+            
+            <p>
+                <label>Valor do Filtro:</label><br>
+                <input type="text" name="filtro_valor" id="filtro_valor" style="width:300px;padding:8px;" placeholder="Digite o valor de busca">
+                <small style="display:block;margin-top:5px;color:blue;">💡 Para 'Estoque Crítico' e 'Zerado', deixe este campo vazio</small>
+            </p>
+            
+            <p>
+                <button type="submit" style="padding:10px 20px;background:blue;color:white;cursor:pointer;">🔍 Buscar</button>
+                <button type="reset" style="padding:10px 20px;background:gray;color:white;cursor:pointer;">Limpar</button>
+            </p>
+        </form>
+        
+        <hr>
+        <h3>Resultados:</h3>
+        {html_tabela}
+        
+        <p><a href="/">🏠 Voltar ao Menu</a></p>
+    </div>
+    '''
+
+@app.route('/relatorio')
+def relatorio():
+    """Exibe relatório de estoque com estatísticas."""
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    relatorio = gerar_relatorio_estoque()
+    
+    # Itens críticos
+    html_criticos = '<tr><td colspan="4" style="text-align:center;color:green;">✅ Nenhum item crítico</td></tr>'
+    if relatorio['itens_criticos']:
+        html_criticos = ''
+        for r in relatorio['itens_criticos']:
+            html_criticos += f'<tr style="background-color:#ffe6e6;"><td><b>{r["nome"]}</b></td><td>{r.get("marca", "N/A")}</td><td>{r.get("volume_nominal", "N/A")}</td><td style="color:red;"><b>{r["quantidade_embalagens"]}</b></td></tr>'
+    
+    # Itens zerados
+    html_zerados = '<tr><td colspan="4" style="text-align:center;color:green;">✅ Nenhum item zerado</td></tr>'
+    if relatorio['itens_zerados']:
+        html_zerados = ''
+        for r in relatorio['itens_zerados']:
+            html_zerados += f'<tr style="background-color:#ffcccc;"><td><b>{r["nome"]}</b></td><td>{r.get("marca", "N/A")}</td><td>{r.get("volume_nominal", "N/A")}</td><td style="color:darkred;"><b>0</b></td></tr>'
+    
+    item_maior = relatorio['item_com_maior_estoque']
+    maior_nome = f"{item_maior['nome']} - {item_maior['quantidade_embalagens']} unidades" if item_maior else "N/A"
+    
+    return f'''
+    <div style="margin:20px;padding:20px;">
+        <h2>📊 Relatório de Estoque</h2>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:30px;">
+            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f9f9f9;">
+                <h3 style="margin:0;">📦 Total de Itens</h3>
+                <p style="font-size:24px;color:blue;font-weight:bold;margin:10px 0;">{relatorio["total_itens"]}</p>
+            </div>
+            
+            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f9f9f9;">
+                <h3 style="margin:0;">📊 Total de Embalagens</h3>
+                <p style="font-size:24px;color:green;font-weight:bold;margin:10px 0;">{relatorio["total_embalagens"]}</p>
+            </div>
+            
+            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f9f9f9;">
+                <h3 style="margin:0;">📈 Média de Estoque</h3>
+                <p style="font-size:24px;color:purple;font-weight:bold;margin:10px 0;">{relatorio["media_embalagens"]}</p>
+            </div>
+        </div>
+        
+        <h3>⚠️ Itens com Estoque Crítico (&lt; 5)</h3>
+        <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+            <tr style="background-color:#ffcccc;"><th>Nome</th><th>Marca</th><th>Volume</th><th>Quantidade</th></tr>
+            {html_criticos}
+        </table>
+        
+        <h3>❌ Itens com Estoque Zerado</h3>
+        <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+            <tr style="background-color:#ffcccc;"><th>Nome</th><th>Marca</th><th>Volume</th><th>Quantidade</th></tr>
+            {html_zerados}
+        </table>
+        
+        <div style="background:#e6f2ff;padding:15px;border-radius:5px;margin-top:20px;">
+            <h3 style="margin-top:0;">🏆 Item com Maior Estoque</h3>
+            <p style="font-size:16px;">{maior_nome}</p>
+        </div>
+        
+        <p><a href="/">🏠 Voltar ao Menu</a></p>
+    </div>
     '''
 
 @app.route('/entrada-reagente', methods=['GET', 'POST'])
@@ -442,7 +773,7 @@ def saidas():
 @app.route('/reagentes')
 def reagentes():
     if 'logged_in' not in session:
-        return redirect('/login')
+        redirect('/login')
     
     html = '<h2>🧪 Reagentes em Estoque</h2>'
     html += '<p><small>📦 <strong>Quantidade</strong> = Número total de embalagens</small></p>'
