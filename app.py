@@ -36,6 +36,74 @@ pedidos_data = [
 entradas_data = []
 saidas_data = []
 
+# Dados de Usuários do Sistema
+usuarios_data = [
+    {
+        'id': 1,
+        'username': 'admin',
+        'password': 'admin123',
+        'email': 'admin@feq.unicamp.br',
+        'nome_completo': 'Administrador do Sistema',
+        'role': 'admin',
+        'ativo': True,
+        'data_criacao': '2024-01-01'
+    },
+    {
+        'id': 2,
+        'username': 'aluno_pos',
+        'password': 'aluno123',
+        'email': 'aluno.pos@feq.unicamp.br',
+        'nome_completo': 'Aluno Pós-Graduação',
+        'role': 'aluno_pos',
+        'ativo': True,
+        'data_criacao': '2024-01-05'
+    },
+    {
+        'id': 3,
+        'username': 'tecnico',
+        'password': 'tec123',
+        'email': 'tecnico@feq.unicamp.br',
+        'nome_completo': 'Técnico de Laboratório',
+        'role': 'tecnico',
+        'ativo': True,
+        'data_criacao': '2024-01-10'
+    },
+    {
+        'id': 4,
+        'username': 'aluno_grad',
+        'password': 'grad123',
+        'email': 'aluno.grad@feq.unicamp.br',
+        'nome_completo': 'Aluno Graduação',
+        'role': 'aluno_graduacao',
+        'ativo': True,
+        'data_criacao': '2024-01-15'
+    }
+]
+
+# Mapeamento de roles e permissões
+ROLES = {
+    'admin': {
+        'descricao': 'Administrador',
+        'cor': '#e74c3c',
+        'permissoes': ['reagentes.criar', 'reagentes.editar', 'reagentes.deletar', 'usuarios.gerenciar', 'relatorios.ver', 'entradas.registrar', 'saidas.registrar']
+    },
+    'aluno_pos': {
+        'descricao': 'Aluno Pós-Graduação',
+        'cor': '#3498db',
+        'permissoes': ['reagentes.ver', 'pedidos.criar', 'relatorios.ver', 'entradas.registrar', 'saidas.registrar']
+    },
+    'tecnico': {
+        'descricao': 'Técnico de Laboratório',
+        'cor': '#27ae60',
+        'permissoes': ['reagentes.ver', 'reagentes.editar', 'entradas.registrar', 'saidas.registrar', 'relatorios.ver']
+    },
+    'aluno_graduacao': {
+        'descricao': 'Aluno Graduação',
+        'cor': '#f39c12',
+        'permissoes': ['reagentes.ver', 'pedidos.ver', 'relatorios.ver']
+    }
+}
+
 # ============================================================================
 # FUNÇÕES DE NEGÓCIO
 # ============================================================================
@@ -164,6 +232,95 @@ def consultar_estoque_por_localizacao():
             por_localizacao[localizacao] = []
         por_localizacao[localizacao].append(r)
     return por_localizacao
+
+def obter_usuario_por_username(username):
+    """Obtém um usuário pelo username."""
+    for u in usuarios_data:
+        if u['username'].lower() == username.lower():
+            return u
+    return None
+
+def obter_usuario_por_id(user_id):
+    """Obtém um usuário pelo ID."""
+    for u in usuarios_data:
+        if u['id'] == user_id:
+            return u
+    return None
+
+def criar_usuario(username, password, email, nome_completo, role='aluno'):
+    """Cria um novo usuário."""
+    if obter_usuario_por_username(username):
+        return {'erro': 'Usuário já existe!'}
+    
+    novo_id = max([u['id'] for u in usuarios_data], default=0) + 1
+    novo_usuario = {
+        'id': novo_id,
+        'username': username,
+        'password': password,
+        'email': email,
+        'nome_completo': nome_completo,
+        'role': role,
+        'ativo': True,
+        'data_criacao': datetime.now().strftime('%Y-%m-%d')
+    }
+    usuarios_data.append(novo_usuario)
+    return {'sucesso': True, 'usuario_id': novo_id}
+
+def atualizar_usuario(user_id, **kwargs):
+    """Atualiza dados de um usuário."""
+    usuario = obter_usuario_por_id(user_id)
+    if not usuario:
+        return {'erro': 'Usuário não encontrado'}
+    
+    campos_permitidos = ['email', 'nome_completo', 'role', 'ativo']
+    for campo, valor in kwargs.items():
+        if campo in campos_permitidos:
+            usuario[campo] = valor
+    
+    return {'sucesso': True}
+
+def deletar_usuario(user_id):
+    """Deleta um usuário."""
+    usuario = obter_usuario_por_id(user_id)
+    if not usuario:
+        return {'erro': 'Usuário não encontrado'}
+    
+    if usuario['username'] == 'admin':
+        return {'erro': 'Não é possível deletar o admin!'}
+    
+    usuarios_data.remove(usuario)
+    return {'sucesso': True}
+
+def listar_usuarios(filtro_role=None, filtro_ativo=None):
+    """Lista usuários com filtros opcionais."""
+    resultados = usuarios_data
+    
+    if filtro_role:
+        resultados = [u for u in resultados if u['role'] == filtro_role]
+    
+    if filtro_ativo is not None:
+        resultados = [u for u in resultados if u['ativo'] == filtro_ativo]
+    
+    return resultados
+
+def verificar_permissao(user_id, permissao):
+    """Verifica se um usuário tem uma permissão específica."""
+    usuario = obter_usuario_por_id(user_id)
+    if not usuario:
+        return False
+    
+    role = usuario['role']
+    if role not in ROLES:
+        return False
+    
+    return permissao in ROLES[role]['permissoes']
+
+def obter_sessao_usuario():
+    """Obtém dados do usuário da sessão atual."""
+    if 'user_id' in session:
+        return obter_usuario_por_id(session['user_id'])
+    return None
+
 
 # ============================================================================
 # ROTAS
