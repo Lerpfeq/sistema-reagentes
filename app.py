@@ -286,6 +286,40 @@ def consultar_estoque_por_localizacao():
     
     return por_localizacao
 
+
+def consultar_pedidos(status='todos'):
+    """
+    Consulta pedidos por status.
+    
+    Args:
+        status: 'abertos', 'recebidos' ou 'todos'
+    
+    Returns: lista de pedidos filtrada
+    """
+    if status == 'abertos':
+        return [p for p in pedidos_data if p['status'] == 'Aberto']
+    elif status == 'recebidos':
+        return [p for p in pedidos_data if p['status'] == 'Finalizado']
+    else:
+        return pedidos_data
+
+
+def gerar_relatorio_pedidos():
+    """Gera um relatório completo de pedidos."""
+    pedidos_abertos = consultar_pedidos('abertos')
+    pedidos_recebidos = consultar_pedidos('recebidos')
+    
+    total_pedidos = len(pedidos_data)
+    
+    return {
+        'total_pedidos': total_pedidos,
+        'pedidos_abertos': pedidos_abertos,
+        'pedidos_recebidos': pedidos_recebidos,
+        'total_abertos': len(pedidos_abertos),
+        'total_recebidos': len(pedidos_recebidos),
+        'percentual_recebidos': round((len(pedidos_recebidos) / total_pedidos * 100), 1) if total_pedidos > 0 else 0
+    }
+
 # ============================================================================
 # ROTAS
 # ============================================================================
@@ -724,53 +758,88 @@ def reagentes():
 
 @app.route('/consulta', methods=['GET', 'POST'])
 def consulta():
-    """Página de consulta avançada de reagentes."""
+    """Página de consulta com abas: Reagentes, Pedidos Abertos e Pedidos Recebidos."""
     if 'logged_in' not in session:
         return redirect('/login')
     
+    aba_ativa = request.args.get('aba', 'reagentes')
     resultados = []
     filtro_aplicado = False
     
     if request.method == 'POST':
         filtro_tipo = request.form.get('filtro_tipo', '')
         filtro_valor = request.form.get('filtro_valor', '')
+        aba_ativa = request.form.get('aba', 'reagentes')
         
-        if filtro_tipo and filtro_valor:
+        if aba_ativa == 'reagentes' and filtro_tipo and filtro_valor:
             resultados = consultar_reagentes(filtro_tipo, filtro_valor)
             filtro_aplicado = True
     
-    # Construir tabela HTML
-    html_tabela = '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html_tabela += '<tr style="background-color:#f0f0f0;"><th>Nome</th><th>Marca</th><th>Volume/Massa</th><th>📍 Localização</th><th>Quantidade</th></tr>'
+    # Dados para as abas
+    pedidos_abertos = consultar_pedidos('abertos')
+    pedidos_recebidos = consultar_pedidos('recebidos')
     
-    if resultados:
-        for r in resultados:
-            volume = r.get('volume_nominal', 'N/A')
-            marca = r.get('marca', 'N/A')
-            localizacao = r.get('localizacao', 'Não informada')
-            qtd_cor = 'red' if r['quantidade_embalagens'] < 5 else 'green'
-            html_tabela += f'<tr>'
-            html_tabela += f'<td><b>{r["nome"]}</b></td>'
-            html_tabela += f'<td>{marca}</td>'
-            html_tabela += f'<td>{volume}</td>'
-            html_tabela += f'<td><b>{localizacao}</b></td>'
-            html_tabela += f'<td style="color:{qtd_cor};"><b>{r["quantidade_embalagens"]}</b></td>'
-            html_tabela += f'</tr>'
-    else:
-        if filtro_aplicado:
-            html_tabela += '<tr><td colspan="5" style="text-align:center;color:red;">❌ Nenhum reagente encontrado</td></tr>'
+    # HTML para ABA REAGENTES
+    html_reagentes = '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html_reagentes += '<tr style="background-color:#f0f0f0;"><th>Nome</th><th>Marca</th><th>Volume/Massa</th><th>📍 Localização</th><th>Quantidade</th></tr>'
+    
+    if aba_ativa == 'reagentes':
+        if resultados:
+            for r in resultados:
+                volume = r.get('volume_nominal', 'N/A')
+                marca = r.get('marca', 'N/A')
+                localizacao = r.get('localizacao', 'Não informada')
+                qtd_cor = 'red' if r['quantidade_embalagens'] < 5 else 'green'
+                html_reagentes += f'<tr><td><b>{r["nome"]}</b></td><td>{marca}</td><td>{volume}</td><td><b>{localizacao}</b></td><td style="color:{qtd_cor};"><b>{r["quantidade_embalagens"]}</b></td></tr>'
         else:
-            html_tabela += '<tr><td colspan="5" style="text-align:center;color:gray;">Realize uma busca para ver resultados</td></tr>'
+            msg = '❌ Nenhum reagente encontrado' if filtro_aplicado else 'Realize uma busca para ver resultados'
+            html_reagentes += f'<tr><td colspan="5" style="text-align:center;color:{"red" if filtro_aplicado else "gray"};">{msg}</td></tr>'
     
-    html_tabela += '</table>'
+    html_reagentes += '</table>'
+    
+    # HTML para ABA PEDIDOS ABERTOS
+    html_abertos = '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html_abertos += '<tr style="background-color:#fff3cd;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
+    
+    if pedidos_abertos:
+        for p in pedidos_abertos:
+            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
+            html_abertos += f'<tr style="background-color:#fffacd;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:orange;"><b>⏳ {p["status"]}</b></td></tr>'
+    else:
+        html_abertos += '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum pedido aberto</td></tr>'
+    
+    html_abertos += '</table>'
+    
+    # HTML para ABA PEDIDOS RECEBIDOS
+    html_recebidos = '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html_recebidos += '<tr style="background-color:#d4edda;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
+    
+    if pedidos_recebidos:
+        for p in pedidos_recebidos:
+            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
+            html_recebidos += f'<tr style="background-color:#e8f5e9;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:green;"><b>✅ {p["status"]}</b></td></tr>'
+    else:
+        html_recebidos += '<tr><td colspan="5" style="text-align:center;color:gray;">Nenhum pedido recebido ainda</td></tr>'
+    
+    html_recebidos += '</table>'
+    
+    # CSS para abas
+    css_aba = 'padding:12px 20px;margin-right:5px;border-radius:5px;text-decoration:none;font-weight:bold;color:white;display:inline-block;'
     
     return f'''
-    <div style="max-width:800px;margin:20px;padding:20px;border:1px solid #ccc;">
-        <h2>🔍 Consultar Reagentes</h2>
+    <div style="max-width:900px;margin:20px;padding:20px;border:1px solid #ccc;">
+        <h2>🔍 Consultas e Pedidos</h2>
         
-        <form method="post">
+        <div style="margin-bottom:25px;border-bottom:2px solid #ddd;padding-bottom:10px;">
+            <a href="/consulta?aba=reagentes" style="{css_aba}background:{'#0066cc' if aba_ativa == 'reagentes' else '#999'};">🧪 Reagentes</a>
+            <a href="/consulta?aba=abertos" style="{css_aba}background:{'#ff9800' if aba_ativa == 'abertos' else '#999'};">⏳ Pedidos Abertos ({len(pedidos_abertos)})</a>
+            <a href="/consulta?aba=recebidos" style="{css_aba}background:{'#4caf50' if aba_ativa == 'recebidos' else '#999'};">✅ Pedidos Recebidos ({len(pedidos_recebidos)})</a>
+        </div>
+        
+        {f'''<form method="post" style="margin-bottom:20px;">
+            <input type="hidden" name="aba" value="reagentes">
             <p>
-                <label>Tipo de Filtro:</label><br>
+                <label><strong>Tipo de Filtro:</strong></label><br>
                 <select name="filtro_tipo" required style="padding:8px;width:300px;">
                     <option value="">-- Selecione um filtro --</option>
                     <option value="nome">Por Nome</option>
@@ -785,48 +854,67 @@ def consulta():
             </p>
             
             <p>
-                <label>Valor do Filtro:</label><br>
-                <input type="text" name="filtro_valor" id="filtro_valor" style="width:300px;padding:8px;" placeholder="Digite o valor de busca">
+                <label><strong>Valor do Filtro:</strong></label><br>
+                <input type="text" name="filtro_valor" style="width:300px;padding:8px;" placeholder="Digite o valor de busca">
                 <small style="display:block;margin-top:5px;color:blue;">💡 Para 'Estoque Crítico' e 'Zerado', deixe este campo vazio</small>
                 <small style="display:block;margin-top:5px;color:green;">✓ Acentos não importam (Ácido = Acido)</small>
             </p>
             
             <p>
-                <button type="submit" style="padding:10px 20px;background:blue;color:white;cursor:pointer;">🔍 Buscar</button>
-                <button type="reset" style="padding:10px 20px;background:gray;color:white;cursor:pointer;">Limpar</button>
+                <button type="submit" style="padding:10px 20px;background:blue;color:white;cursor:pointer;border-radius:5px;">🔍 Buscar</button>
+                <button type="reset" style="padding:10px 20px;background:gray;color:white;cursor:pointer;border-radius:5px;">Limpar</button>
             </p>
-        </form>
+        </form>''' if aba_ativa == 'reagentes' else ''}
         
         <hr>
-        <h3>Resultados:</h3>
-        {html_tabela}
         
-        <p><a href="/">🏠 Voltar ao Menu</a></p>
+        {f'<h3>Resultados de Reagentes ({len(resultados)}):</h3>{html_reagentes}' if aba_ativa == 'reagentes' else ''}
+        {f'<h3>Pedidos Abertos ({len(pedidos_abertos)})</h3>{html_abertos}' if aba_ativa == 'abertos' else ''}
+        {f'<h3>Pedidos Recebidos ({len(pedidos_recebidos)})</h3>{html_recebidos}' if aba_ativa == 'recebidos' else ''}
+        
+        <p style="margin-top:20px;"><a href="/">🏠 Voltar ao Menu</a></p>
     </div>
     '''
 
 @app.route('/relatorio')
 def relatorio():
-    """Exibe relatório de estoque com estatísticas e localização."""
+    """Exibe relatório de estoque com estatísticas, localização e pedidos."""
     if 'logged_in' not in session:
         return redirect('/login')
     
-    relatorio = gerar_relatorio_estoque()
+    relatorio_estoque = gerar_relatorio_estoque()
+    relatorio_pedidos = gerar_relatorio_pedidos()
     por_localizacao = consultar_estoque_por_localizacao()
     
     # Itens críticos
     html_criticos = '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum item crítico</td></tr>'
-    if relatorio['itens_criticos']:
+    if relatorio_estoque['itens_criticos']:
         html_criticos = ''
-        for r in relatorio['itens_criticos']:
+        for r in relatorio_estoque['itens_criticos']:
             html_criticos += f'<tr style="background-color:#ffe6e6;"><td><b>{r["nome"]}</b></td><td>{r.get("marca", "N/A")}</td><td>{r.get("volume_nominal", "N/A")}</td><td><b>{r.get("localizacao", "N/A")}</b></td><td style="color:red;"><b>{r["quantidade_embalagens"]}</b></td></tr>'
     
     # Itens zerados
     html_zerados = '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum item zerado</td></tr>'
-    if relatorio['itens_zerados']:
+    if relatorio_estoque['itens_zerados']:
         html_zerados = ''
-        for r in relatorio['itens_zerados']:
+        for r in relatorio_estoque['itens_zerados']:
             html_zerados += f'<tr style="background-color:#ffcccc;"><td><b>{r["nome"]}</b></td><td>{r.get("marca", "N/A")}</td><td>{r.get("volume_nominal", "N/A")}</td><td><b>{r.get("localizacao", "N/A")}</b></td><td style="color:darkred;"><b>0</b></td></tr>'
+    
+    # Pedidos abertos
+    html_pedidos_abertos = '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum pedido aberto</td></tr>'
+    if relatorio_pedidos['pedidos_abertos']:
+        html_pedidos_abertos = ''
+        for p in relatorio_pedidos['pedidos_abertos']:
+            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
+            html_pedidos_abertos += f'<tr style="background-color:#fffacd;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:orange;"><b>⏳ {p["status"]}</b></td></tr>'
+    
+    # Pedidos recebidos
+    html_pedidos_recebidos = '<tr><td colspan="5" style="text-align:center;color:gray;">Nenhum pedido recebido ainda</td></tr>'
+    if relatorio_pedidos['pedidos_recebidos']:
+        html_pedidos_recebidos = ''
+        for p in relatorio_pedidos['pedidos_recebidos']:
+            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
+            html_pedidos_recebidos += f'<tr style="background-color:#e8f5e9;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:green;"><b>✅ {p["status"]}</b></td></tr>'
     
     # Reagentes por localização
     html_por_localizacao = ''
@@ -839,27 +927,39 @@ def relatorio():
             html_por_localizacao += f'<tr><td>{r["nome"]}</td><td>{r.get("marca", "N/A")}</td><td>{r.get("volume_nominal", "N/A")}</td><td><b>{r["quantidade_embalagens"]}</b></td></tr>'
         html_por_localizacao += '</table>'
     
-    item_maior = relatorio['item_com_maior_estoque']
+    item_maior = relatorio_estoque['item_com_maior_estoque']
     maior_nome = f"{item_maior['nome']} ({item_maior.get('localizacao', 'N/A')}) - {item_maior['quantidade_embalagens']} unidades" if item_maior else "N/A"
     
     return f'''
     <div style="margin:20px;padding:20px;">
-        <h2>📊 Relatório de Estoque</h2>
+        <h2>📊 Relatório Completo</h2>
         
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:30px;">
-            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f9f9f9;">
+            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f0f7ff;">
                 <h3 style="margin:0;">📦 Total de Itens</h3>
-                <p style="font-size:24px;color:blue;font-weight:bold;margin:10px 0;">{relatorio["total_itens"]}</p>
+                <p style="font-size:24px;color:blue;font-weight:bold;margin:10px 0;">{relatorio_estoque["total_itens"]}</p>
             </div>
             
-            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f9f9f9;">
+            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f0fff4;">
                 <h3 style="margin:0;">📊 Total de Embalagens</h3>
-                <p style="font-size:24px;color:green;font-weight:bold;margin:10px 0;">{relatorio["total_embalagens"]}</p>
+                <p style="font-size:24px;color:green;font-weight:bold;margin:10px 0;">{relatorio_estoque["total_embalagens"]}</p>
             </div>
             
-            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f9f9f9;">
+            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#faf5ff;">
                 <h3 style="margin:0;">📈 Média de Estoque</h3>
-                <p style="font-size:24px;color:purple;font-weight:bold;margin:10px 0;">{relatorio["media_embalagens"]}</p>
+                <p style="font-size:24px;color:purple;font-weight:bold;margin:10px 0;">{relatorio_estoque["media_embalagens"]}</p>
+            </div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:30px;">
+            <div style="border:1px solid #ff9800;padding:15px;border-radius:5px;background:#fff3e0;">
+                <h3 style="margin:0;">⏳ Pedidos Abertos</h3>
+                <p style="font-size:24px;color:#ff9800;font-weight:bold;margin:10px 0;">{relatorio_pedidos["total_abertos"]}</p>
+            </div>
+            
+            <div style="border:1px solid #4caf50;padding:15px;border-radius:5px;background:#f1f8e9;">
+                <h3 style="margin:0;">✅ Pedidos Recebidos</h3>
+                <p style="font-size:24px;color:#4caf50;font-weight:bold;margin:10px 0;">{relatorio_pedidos["total_recebidos"]}</p>
             </div>
         </div>
         
@@ -875,6 +975,18 @@ def relatorio():
             {html_zerados}
         </table>
         
+        <h3>⏳ Pedidos Abertos ({relatorio_pedidos["total_abertos"]})</h3>
+        <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+            <tr style="background-color:#fff3cd;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>
+            {html_pedidos_abertos}
+        </table>
+        
+        <h3>✅ Pedidos Recebidos ({relatorio_pedidos["total_recebidos"]})</h3>
+        <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+            <tr style="background-color:#d4edda;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>
+            {html_pedidos_recebidos}
+        </table>
+        
         <div style="background:#e6f2ff;padding:15px;border-radius:5px;margin-top:20px;margin-bottom:20px;">
             <h3 style="margin-top:0;">🏆 Item com Maior Estoque</h3>
             <p style="font-size:16px;">{maior_nome}</p>
@@ -886,123 +998,3 @@ def relatorio():
         <p><a href="/">🏠 Voltar ao Menu</a></p>
     </div>
     '''
-
-@app.route('/novo-pedido', methods=['GET', 'POST'])
-def novo_pedido():
-    if 'logged_in' not in session:
-        return redirect('/login')
-    
-    if request.method == 'POST':
-        nome_reagente = request.form['nome_reagente']
-        data_pedido = request.form['data_pedido']
-        controlado = request.form['controlado']
-        quantidade_nominal = request.form['quantidade_nominal']
-        
-        novo_pedido = {
-            'id': len(pedidos_data) + 1,
-            'reagente': nome_reagente,
-            'data': data_pedido,
-            'controlado': controlado,
-            'quantidade_nominal': quantidade_nominal,
-            'status': 'Aberto'
-        }
-        pedidos_data.append(novo_pedido)
-        
-        return f'''
-        <h2>✅ Pedido Criado!</h2>
-        <p>Reagente: <b>{nome_reagente}</b></p>
-        <p>Quantidade: <b>{quantidade_nominal}</b></p>
-        <p>Data: {data_pedido}</p>
-        <p>Controlado: {controlado}</p>
-        <p><a href="/pedidos">📝 Ver Todos os Pedidos</a></p>
-        <p><a href="/">🏠 Voltar ao Menu</a></p>
-        '''
-    
-    return '''
-    <div style="max-width:500px;margin:20px;padding:20px;border:1px solid #ccc;">
-        <h2>Pedido de Reagente</h2>
-        <form method="post">
-            <p>
-                <label>Nome do Reagente:</label><br>
-                <input type="text" name="nome_reagente" required style="width:300px;padding:5px;">
-            </p>
-            <p>
-                <label>Quantidade Nominal:</label><br>
-                <input type="text" name="quantidade_nominal" placeholder="Ex: 500ml, 1L, 250g, 2kg" required style="width:200px;padding:5px;">
-            </p>
-            <p>
-                <label>Data do Pedido:</label><br>
-                <input type="date" name="data_pedido" required style="padding:5px;">
-            </p>
-            <p>
-                <label>Reagente Controlado?</label><br>
-                <select name="controlado" style="padding:5px;">
-                    <option value="Sim">Sim</option>
-                    <option value="Não" selected>Não</option>
-                </select>
-            </p>
-            <p>
-                <button type="submit" style="padding:8px 15px;background:green;color:white;">Salvar</button>
-                <button type="reset" style="padding:8px 15px;background:gray;color:white;">Fechar</button>
-            </p>
-        </form>
-        <p><a href="/">🏠 Voltar</a></p>
-    </div>
-    '''
-
-@app.route('/pedidos')
-def pedidos():
-    if 'logged_in' not in session:
-        return redirect('/login')
-    
-    html = '<h2>📝 Pedidos de Reagentes</h2>'
-    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>Reagente</th><th>Quantidade Nominal</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
-    
-    for p in pedidos_data:
-        status_cor = 'green' if p['status'] == 'Finalizado' else 'orange'
-        controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
-        html += f'<tr>'
-        html += f'<td><b>{p["reagente"]}</b></td>'
-        html += f'<td>{p["quantidade_nominal"]}</td>'
-        html += f'<td>{p["data"]}</td>'
-        html += f'<td style="color:{controlado_cor}"><b>{p["controlado"]}</b></td>'
-        html += f'<td style="color:{status_cor}"><b>{p["status"]}</b></td>'
-        html += f'</tr>'
-    
-    html += '</table>'
-    html += '<p><a href="/novo-pedido">➕ Novo Pedido</a></p>'
-    html += '<p><a href="/">🏠 Voltar</a></p>'
-    return html
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        if username == 'admin' and password == 'admin123':
-            session['logged_in'] = True
-            return redirect('/')
-    
-    return '''
-    <div style="max-width:400px;margin:50px auto;padding:20px;border:1px solid #ccc;">
-        <form method="post">
-            <h2>🔐 Login Sistema</h2>
-            <p>Usuário: <input name="username" required style="width:100%;padding:5px;"></p>
-            <p>Senha: <input type="password" name="password" required style="width:100%;padding:5px;"></p>
-            <button style="width:100%;padding:10px;background:blue;color:white;">Entrar</button>
-        </form>
-        <p><small>Use: admin / admin123</small></p>
-    </div>
-    '''
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect('/login')
-
-if __name__ == '__main__':
-    import os
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
