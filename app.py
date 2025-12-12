@@ -10,23 +10,15 @@ app.secret_key = 'reagentes-secret-2024'
 # ============================================================================
 
 def remover_acentos(texto):
-    """
-    Remove acentos de um texto.
-    Exemplo: 'Ácido' -> 'Acido', 'São Paulo' -> 'Sao Paulo'
-    """
+    """Remove acentos de um texto."""
     if not texto:
         return texto
-    
-    # Normaliza para NFD (decomposição)
     nfd = unicodedata.normalize('NFD', texto)
-    # Remove caracteres de combinação (acentos)
     sem_acentos = ''.join(char for char in nfd if unicodedata.category(char) != 'Mn')
     return sem_acentos
 
 def normalizar_para_comparacao(texto):
-    """
-    Prepara texto para comparação (remove acentos e converte para lowercase).
-    """
+    """Prepara texto para comparação."""
     return remover_acentos(texto).lower()
 
 # Dados em memória
@@ -44,6 +36,10 @@ pedidos_data = [
 entradas_data = []
 saidas_data = []
 
+# ============================================================================
+# FUNÇÕES DE NEGÓCIO
+# ============================================================================
+
 def get_pedidos_abertos():
     return [p for p in pedidos_data if p['status'] == 'Aberto']
 
@@ -54,16 +50,10 @@ def finalizar_pedido(pedido_id):
             break
 
 def atualizar_reagente_quantidade(nome_reagente, volume_nominal, marca, quantidade_embalagens_adicionar, localizacao=''):
-    """
-    Atualiza quantidade de um reagente existente ou cria novo.
-    Usa normalização de acentos para comparação.
-    """
-    # Normalizar para comparação
     nome_norm = normalizar_para_comparacao(nome_reagente)
     volume_norm = normalizar_para_comparacao(volume_nominal)
     marca_norm = normalizar_para_comparacao(marca)
     
-    # Procura reagente existente
     for r in reagentes_data:
         if (normalizar_para_comparacao(r['nome']) == nome_norm and 
             normalizar_para_comparacao(r.get('volume_nominal', '')) == volume_norm and
@@ -73,7 +63,6 @@ def atualizar_reagente_quantidade(nome_reagente, volume_nominal, marca, quantida
                 r['localizacao'] = localizacao
             return
     
-    # Se não existe, cria novo registro
     novo_id = max([r['id'] for r in reagentes_data]) + 1 if reagentes_data else 1
     reagentes_data.append({
         'id': novo_id,
@@ -84,30 +73,8 @@ def atualizar_reagente_quantidade(nome_reagente, volume_nominal, marca, quantida
         'localizacao': localizacao or 'Não informada'
     })
 
-# ============================================================================
-# FUNÇÕES DE CONSULTA AVANÇADA
-# ============================================================================
-
 def consultar_reagentes(filtro_tipo='', filtro_valor=''):
-    """
-    Consulta reagentes com múltiplos filtros.
-    Usa normalização de acentos para comparação.
-    
-    Tipos de filtro:
-    - 'nome': busca por nome (contém)
-    - 'marca': busca por marca exata
-    - 'volume': busca por volume (contém)
-    - 'localizacao': busca por localização
-    - 'quantidade_min': quantidade mínima em estoque
-    - 'quantidade_max': quantidade máxima em estoque
-    - 'critico': mostra apenas reagentes com estoque crítico (< 5 embalagens)
-    - 'zerado': mostra apenas reagentes zerados
-    - 'todos': retorna todos
-    
-    Returns: lista de reagentes que atendem aos critérios
-    """
     resultados = []
-    
     if not filtro_tipo or filtro_tipo == 'todos':
         return reagentes_data
     
@@ -115,41 +82,33 @@ def consultar_reagentes(filtro_tipo='', filtro_valor=''):
     
     for r in reagentes_data:
         match = False
-        
         if filtro_tipo == 'nome':
             if filtro_valor_norm in normalizar_para_comparacao(r['nome']):
                 match = True
-        
         elif filtro_tipo == 'marca':
             if normalizar_para_comparacao(r.get('marca', '')) == filtro_valor_norm:
                 match = True
-        
         elif filtro_tipo == 'volume':
             if filtro_valor_norm in normalizar_para_comparacao(r.get('volume_nominal', '')):
                 match = True
-        
         elif filtro_tipo == 'localizacao':
             if filtro_valor_norm in normalizar_para_comparacao(r.get('localizacao', '')):
                 match = True
-        
         elif filtro_tipo == 'quantidade_min':
             try:
                 if r['quantidade_embalagens'] >= int(filtro_valor):
                     match = True
             except ValueError:
                 pass
-        
         elif filtro_tipo == 'quantidade_max':
             try:
                 if r['quantidade_embalagens'] <= int(filtro_valor):
                     match = True
             except ValueError:
                 pass
-        
         elif filtro_tipo == 'critico':
             if r['quantidade_embalagens'] < 5:
                 match = True
-        
         elif filtro_tipo == 'zerado':
             if r['quantidade_embalagens'] <= 0:
                 match = True
@@ -159,66 +118,15 @@ def consultar_reagentes(filtro_tipo='', filtro_valor=''):
     
     return resultados
 
-
-def consultar_por_multiplos_filtros(nome=None, marca=None, volume=None, localizacao=None,
-                                   estoque_min=None, estoque_max=None):
-    """
-    Consulta com múltiplos filtros simultâneos (AND logic).
-    Usa normalização de acentos para comparação.
-    
-    Args:
-        nome: substring do nome do reagente
-        marca: marca exata (case-insensitive, sem acentos)
-        volume: substring do volume/massa
-        localizacao: substring da localização
-        estoque_min: quantidade mínima de embalagens
-        estoque_max: quantidade máxima de embalagens
-    
-    Returns: lista de reagentes que atendem a TODOS os critérios
-    """
-    resultados = reagentes_data
-    
-    if nome:
-        nome_norm = normalizar_para_comparacao(nome)
-        resultados = [r for r in resultados 
-                     if nome_norm in normalizar_para_comparacao(r['nome'])]
-    
-    if marca:
-        marca_norm = normalizar_para_comparacao(marca)
-        resultados = [r for r in resultados 
-                     if normalizar_para_comparacao(r.get('marca', '')) == marca_norm]
-    
-    if volume:
-        volume_norm = normalizar_para_comparacao(volume)
-        resultados = [r for r in resultados 
-                     if volume_norm in normalizar_para_comparacao(r.get('volume_nominal', ''))]
-    
-    if localizacao:
-        localizacao_norm = normalizar_para_comparacao(localizacao)
-        resultados = [r for r in resultados 
-                     if localizacao_norm in normalizar_para_comparacao(r.get('localizacao', ''))]
-    
-    if estoque_min is not None:
-        try:
-            min_val = int(estoque_min)
-            resultados = [r for r in resultados 
-                         if r['quantidade_embalagens'] >= min_val]
-        except (ValueError, TypeError):
-            pass
-    
-    if estoque_max is not None:
-        try:
-            max_val = int(estoque_max)
-            resultados = [r for r in resultados 
-                         if r['quantidade_embalagens'] <= max_val]
-        except (ValueError, TypeError):
-            pass
-    
-    return resultados
-
+def consultar_pedidos(status='todos'):
+    if status == 'abertos':
+        return [p for p in pedidos_data if p['status'] == 'Aberto']
+    elif status == 'recebidos':
+        return [p for p in pedidos_data if p['status'] == 'Finalizado']
+    else:
+        return pedidos_data
 
 def gerar_relatorio_estoque():
-    """Gera um relatório completo do estoque com estatísticas."""
     total_itens = len(reagentes_data)
     total_embalagens = sum(r['quantidade_embalagens'] for r in reagentes_data)
     criticos = [r for r in reagentes_data if r['quantidade_embalagens'] < 5]
@@ -233,79 +141,7 @@ def gerar_relatorio_estoque():
         'item_com_maior_estoque': max(reagentes_data, key=lambda x: x['quantidade_embalagens']) if reagentes_data else None
     }
 
-
-def consultar_entradas_por_periodo(data_inicio, data_fim):
-    """Consulta entradas de reagentes em um período específico."""
-    try:
-        inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
-        fim = datetime.strptime(data_fim, '%Y-%m-%d')
-    except ValueError:
-        return []
-    
-    resultados = []
-    for e in entradas_data:
-        try:
-            data_entrada = datetime.strptime(e['data_chegada'], '%Y-%m-%d')
-            if inicio <= data_entrada <= fim:
-                resultados.append(e)
-        except ValueError:
-            pass
-    
-    return resultados
-
-
-def consultar_saidas_por_reagente(nome_reagente):
-    """Retorna todas as saídas de um reagente específico (ignora acentos)."""
-    nome_norm = normalizar_para_comparacao(nome_reagente)
-    return [s for s in saidas_data 
-            if normalizar_para_comparacao(s['nome_reagente']) == nome_norm]
-
-
-def consultar_estoque_por_marca():
-    """Retorna um dicionário agrupando reagentes por marca."""
-    por_marca = {}
-    
-    for r in reagentes_data:
-        marca = r.get('marca', 'Sem marca informada')
-        if marca not in por_marca:
-            por_marca[marca] = []
-        por_marca[marca].append(r)
-    
-    return por_marca
-
-
-def consultar_estoque_por_localizacao():
-    """Retorna um dicionário agrupando reagentes por localização."""
-    por_localizacao = {}
-    
-    for r in reagentes_data:
-        localizacao = r.get('localizacao', 'Não informada')
-        if localizacao not in por_localizacao:
-            por_localizacao[localizacao] = []
-        por_localizacao[localizacao].append(r)
-    
-    return por_localizacao
-
-
-def consultar_pedidos(status='todos'):
-    """
-    Consulta pedidos por status.
-    
-    Args:
-        status: 'abertos', 'recebidos' ou 'todos'
-    
-    Returns: lista de pedidos filtrada
-    """
-    if status == 'abertos':
-        return [p for p in pedidos_data if p['status'] == 'Aberto']
-    elif status == 'recebidos':
-        return [p for p in pedidos_data if p['status'] == 'Finalizado']
-    else:
-        return pedidos_data
-
-
 def gerar_relatorio_pedidos():
-    """Gera um relatório completo de pedidos."""
     pedidos_abertos = consultar_pedidos('abertos')
     pedidos_recebidos = consultar_pedidos('recebidos')
     
@@ -320,28 +156,792 @@ def gerar_relatorio_pedidos():
         'percentual_recebidos': round((len(pedidos_recebidos) / total_pedidos * 100), 1) if total_pedidos > 0 else 0
     }
 
+def consultar_estoque_por_localizacao():
+    por_localizacao = {}
+    for r in reagentes_data:
+        localizacao = r.get('localizacao', 'Não informada')
+        if localizacao not in por_localizacao:
+            por_localizacao[localizacao] = []
+        por_localizacao[localizacao].append(r)
+    return por_localizacao
+
 # ============================================================================
 # ROTAS
 # ============================================================================
 
 @app.route('/')
 def home():
+    """Home da intranet do laboratório."""
     if 'logged_in' not in session:
         return redirect('/login')
     
     return '''
-    <h1>🧪 Sistema de Reagentes</h1>
-    <p>✅ Logado como: admin</p>
-    <p><a href="/reagentes">📋 Ver Reagentes</a></p>
-    <p><a href="/consulta">🔍 Consultar Reagentes</a></p>
-    <p><a href="/relatorio">📊 Relatório de Estoque</a></p>
-    <p><a href="/pedidos">📝 Ver Pedidos</a></p>
-    <p><a href="/novo-pedido">➕ Novo Pedido</a></p>
-    <p><a href="/entrada-reagente">📦 Entrada de Reagente</a></p>
-    <p><a href="/entradas">📋 Ver Entradas</a></p>
-    <p><a href="/saida-reagente">➖ Saída de Reagente</a></p>
-    <p><a href="/saidas">📤 Ver Saídas</a></p>
-    <p><a href="/logout">Sair</a></p>
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Intranet do Laboratório - Faculdade de Engenharia Química</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background-color: #f5f5f5;
+            }
+            
+            .header {
+                background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+                color: white;
+                padding: 20px 40px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+            
+            .header-left {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+            }
+            
+            .logo {
+                font-size: 24px;
+                font-weight: bold;
+            }
+            
+            .header-title {
+                border-left: 2px solid white;
+                padding-left: 20px;
+            }
+            
+            .header-title h1 {
+                font-size: 20px;
+                margin-bottom: 5px;
+            }
+            
+            .header-title p {
+                font-size: 12px;
+                opacity: 0.9;
+            }
+            
+            .user-info {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }
+            
+            .user-info a {
+                color: white;
+                text-decoration: none;
+                padding: 8px 15px;
+                background: rgba(255,255,255,0.2);
+                border-radius: 5px;
+                transition: background 0.3s;
+            }
+            
+            .user-info a:hover {
+                background: rgba(255,255,255,0.3);
+            }
+            
+            .nav-tabs {
+                background: white;
+                border-bottom: 2px solid #ecf0f1;
+                padding: 0 40px;
+                display: flex;
+                gap: 30px;
+                flex-wrap: wrap;
+            }
+            
+            .nav-tabs a {
+                padding: 15px 0;
+                color: #2c3e50;
+                text-decoration: none;
+                border-bottom: 3px solid transparent;
+                transition: all 0.3s;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            
+            .nav-tabs a:hover {
+                color: #3498db;
+                border-bottom-color: #3498db;
+            }
+            
+            .container {
+                max-width: 1400px;
+                margin: 40px auto;
+                padding: 0 40px;
+            }
+            
+            .page-title {
+                margin-bottom: 30px;
+            }
+            
+            .page-title h2 {
+                font-size: 28px;
+                color: #2c3e50;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            
+            .services-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 20px;
+                margin-top: 30px;
+            }
+            
+            .service-card {
+                background: white;
+                border-radius: 8px;
+                padding: 25px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                transition: all 0.3s;
+                cursor: pointer;
+                border-left: 5px solid #3498db;
+            }
+            
+            .service-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            }
+            
+            .service-card.reagentes {
+                border-left-color: #e74c3c;
+                background: linear-gradient(135deg, #fff5f5 0%, #ffe8e8 100%);
+            }
+            
+            .service-card.pedidos {
+                border-left-color: #f39c12;
+                background: linear-gradient(135deg, #fffbf0 0%, #ffe8cc 100%);
+            }
+            
+            .service-card.entradas {
+                border-left-color: #27ae60;
+                background: linear-gradient(135deg, #f0fff4 0%, #d5f4e6 100%);
+            }
+            
+            .service-card.saidas {
+                border-left-color: #9b59b6;
+                background: linear-gradient(135deg, #faf5ff 0%, #f0e6ff 100%);
+            }
+            
+            .service-card.relatorio {
+                border-left-color: #3498db;
+                background: linear-gradient(135deg, #f0f8ff 0%, #e0f2ff 100%);
+            }
+            
+            .service-card h3 {
+                font-size: 18px;
+                color: #2c3e50;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .service-card p {
+                color: #555;
+                font-size: 14px;
+                line-height: 1.6;
+                margin-bottom: 15px;
+            }
+            
+            .service-card a {
+                display: inline-block;
+                padding: 10px 20px;
+                background: #3498db;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+                font-size: 13px;
+                font-weight: 600;
+                transition: background 0.3s;
+            }
+            
+            .service-card.reagentes a {
+                background: #e74c3c;
+            }
+            
+            .service-card.pedidos a {
+                background: #f39c12;
+            }
+            
+            .service-card.entradas a {
+                background: #27ae60;
+            }
+            
+            .service-card.saidas a {
+                background: #9b59b6;
+            }
+            
+            .service-card.relatorio a {
+                background: #3498db;
+            }
+            
+            .service-card a:hover {
+                opacity: 0.9;
+            }
+            
+            .footer {
+                text-align: center;
+                padding: 30px;
+                color: #666;
+                font-size: 12px;
+                margin-top: 50px;
+            }
+            
+            @media (max-width: 768px) {
+                .header {
+                    flex-direction: column;
+                    gap: 15px;
+                    padding: 15px;
+                }
+                
+                .nav-tabs {
+                    padding: 0 20px;
+                    gap: 15px;
+                }
+                
+                .container {
+                    padding: 0 20px;
+                }
+                
+                .services-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">🔬 FEQ</div>
+                <div class="header-title">
+                    <h1>Faculdade de Engenharia Química</h1>
+                    <p>Sistema de Gestão do Laboratório</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <span>👤 Bem-vindo, admin</span>
+                <a href="/logout">Sair</a>
+            </div>
+        </div>
+        
+        <div class="nav-tabs">
+            <a href="/">🏠 Dashboard</a>
+            <a href="/reagentes">🧪 Reagentes</a>
+            <a href="/consulta">🔍 Consultas</a>
+            <a href="/relatorio">📊 Relatório</a>
+        </div>
+        
+        <div class="container">
+            <div class="page-title">
+                <h2>🏠 Dashboard - Intranet do Laboratório</h2>
+            </div>
+            
+            <div class="services-grid">
+                <div class="service-card reagentes">
+                    <h3>🧪 Reagentes em Estoque</h3>
+                    <p>Visualize e gerencie todos os reagentes disponíveis no laboratório com informações de marca, volume e localização.</p>
+                    <a href="/reagentes">Acessar →</a>
+                </div>
+                
+                <div class="service-card pedidos">
+                    <h3>📝 Gerenciar Pedidos</h3>
+                    <p>Crie novos pedidos de reagentes e acompanhe o status de pedidos abertos e recebidos.</p>
+                    <a href="/novo-pedido">Novo Pedido →</a>
+                </div>
+                
+                <div class="service-card entradas">
+                    <h3>📦 Entrada de Reagentes</h3>
+                    <p>Registre a chegada de novos reagentes no laboratório com data e localização de armazenagem.</p>
+                    <a href="/entrada-reagente">Registrar Entrada →</a>
+                </div>
+                
+                <div class="service-card saidas">
+                    <h3>➖ Saída de Reagentes</h3>
+                    <p>Registre a retirada de reagentes do estoque para uso em experimentos e aulas.</p>
+                    <a href="/saida-reagente">Registrar Saída →</a>
+                </div>
+                
+                <div class="service-card relatorio">
+                    <h3>📊 Relatório Completo</h3>
+                    <p>Visualize estatísticas de estoque, pedidos abertos, itens críticos e distribuição por localização.</p>
+                    <a href="/relatorio">Ver Relatório →</a>
+                </div>
+                
+                <div class="service-card relatorio" style="border-left-color: #16a085; background: linear-gradient(135deg, #f0fff8 0%, #d5f4f1 100%);">
+                    <h3>🔍 Consultas Avançadas</h3>
+                    <p>Busque reagentes, visualize pedidos abertos e recebidos com filtros avançados e múltiplas opções.</p>
+                    <a href="/consulta" style="background: #16a085;">Consultar →</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2024 Sistema de Gestão de Reagentes - Faculdade de Engenharia Química | Unicamp</p>
+            <p>Desenvolvido com ❤️ para melhorar a eficiência do laboratório</p>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Página de login do sistema."""
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        if username == 'admin' and password == 'admin123':
+            session['logged_in'] = True
+            return redirect('/')
+        else:
+            erro = '❌ Usuário ou senha incorretos!'
+            return f'''
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Login - Intranet do Laboratório</title>
+                <style>
+                    * {{
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }}
+                    
+                    body {{
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        min-height: 100vh;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }}
+                    
+                    .login-container {{
+                        background: white;
+                        padding: 50px;
+                        border-radius: 10px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        width: 100%;
+                        max-width: 400px;
+                    }}
+                    
+                    .login-header {{
+                        text-align: center;
+                        margin-bottom: 40px;
+                    }}
+                    
+                    .login-header h1 {{
+                        font-size: 32px;
+                        color: #2c3e50;
+                        margin-bottom: 10px;
+                    }}
+                    
+                    .login-header p {{
+                        color: #666;
+                        font-size: 14px;
+                    }}
+                    
+                    .error {{
+                        background: #f8d7da;
+                        color: #721c24;
+                        padding: 12px;
+                        border-radius: 5px;
+                        margin-bottom: 20px;
+                        border-left: 4px solid #f5c6cb;
+                    }}
+                    
+                    .form-group {{
+                        margin-bottom: 20px;
+                    }}
+                    
+                    .form-group label {{
+                        display: block;
+                        color: #2c3e50;
+                        font-weight: 600;
+                        margin-bottom: 8px;
+                    }}
+                    
+                    .form-group input {{
+                        width: 100%;
+                        padding: 12px;
+                        border: 1px solid #ddd;
+                        border-radius: 5px;
+                        font-size: 14px;
+                        transition: border-color 0.3s;
+                    }}
+                    
+                    .form-group input:focus {{
+                        outline: none;
+                        border-color: #667eea;
+                        box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+                    }}
+                    
+                    .form-group button {{
+                        width: 100%;
+                        padding: 12px;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: transform 0.2s;
+                    }}
+                    
+                    .form-group button:hover {{
+                        transform: translateY(-2px);
+                    }}
+                    
+                    .credentials {{
+                        background: #ecf0f1;
+                        padding: 15px;
+                        border-radius: 5px;
+                        text-align: center;
+                        font-size: 13px;
+                        color: #555;
+                    }}
+                    
+                    .credentials p {{
+                        margin: 5px 0;
+                    }}
+                    
+                    .credentials strong {{
+                        color: #2c3e50;
+                        font-family: monospace;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="login-container">
+                    <div class="login-header">
+                        <h1>🔐 Login</h1>
+                        <p>Intranet do Laboratório - FEQ</p>
+                    </div>
+                    
+                    <form method="post">
+                        <div class="error">{erro}</div>
+                        
+                        <div class="form-group">
+                            <label>Usuário:</label>
+                            <input type="text" name="username" required autofocus>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Senha:</label>
+                            <input type="password" name="password" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit">Entrar</button>
+                        </div>
+                    </form>
+                    
+                    <div class="credentials">
+                        <p><strong>Credenciais de Teste:</strong></p>
+                        <p>👤 Usuário: <strong>admin</strong></p>
+                        <p>🔑 Senha: <strong>admin123</strong></p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            '''
+    
+    return '''
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login - Intranet do Laboratório</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            
+            .login-container {
+                background: white;
+                padding: 50px;
+                border-radius: 10px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                width: 100%;
+                max-width: 400px;
+            }
+            
+            .login-header {
+                text-align: center;
+                margin-bottom: 40px;
+            }
+            
+            .login-header h1 {
+                font-size: 32px;
+                color: #2c3e50;
+                margin-bottom: 10px;
+            }
+            
+            .login-header p {
+                color: #666;
+                font-size: 14px;
+            }
+            
+            .form-group {
+                margin-bottom: 20px;
+            }
+            
+            .form-group label {
+                display: block;
+                color: #2c3e50;
+                font-weight: 600;
+                margin-bottom: 8px;
+            }
+            
+            .form-group input {
+                width: 100%;
+                padding: 12px;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                font-size: 14px;
+                transition: border-color 0.3s;
+            }
+            
+            .form-group input:focus {
+                outline: none;
+                border-color: #667eea;
+                box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+            }
+            
+            .form-group button {
+                width: 100%;
+                padding: 12px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+            
+            .form-group button:hover {
+                transform: translateY(-2px);
+            }
+            
+            .credentials {
+                background: #ecf0f1;
+                padding: 15px;
+                border-radius: 5px;
+                text-align: center;
+                font-size: 13px;
+                color: #555;
+            }
+            
+            .credentials p {
+                margin: 5px 0;
+            }
+            
+            .credentials strong {
+                color: #2c3e50;
+                font-family: monospace;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-container">
+            <div class="login-header">
+                <h1>🔐 Login</h1>
+                <p>Intranet do Laboratório - FEQ</p>
+            </div>
+            
+            <form method="post">
+                <div class="form-group">
+                    <label>Usuário:</label>
+                    <input type="text" name="username" required autofocus>
+                </div>
+                
+                <div class="form-group">
+                    <label>Senha:</label>
+                    <input type="password" name="password" required>
+                </div>
+                
+                <div class="form-group">
+                    <button type="submit">Entrar</button>
+                </div>
+            </form>
+            
+            <div class="credentials">
+                <p><strong>Credenciais de Teste:</strong></p>
+                <p>👤 Usuário: <strong>admin</strong></p>
+                <p>🔑 Senha: <strong>admin123</strong></p>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/logout')
+def logout():
+    """Logout do sistema."""
+    session.clear()
+    return redirect('/login')
+
+@app.route('/reagentes')
+def reagentes():
+    """Ver reagentes em estoque."""
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    html = '<div style="margin:20px;padding:20px;">'
+    html += '<h2>🧪 Reagentes em Estoque</h2>'
+    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html += '<tr style="background-color:#f0f0f0;"><th>Nome</th><th>Marca</th><th>Volume/Massa</th><th>📍 Localização</th><th>Quantidade</th></tr>'
+    
+    for r in reagentes_data:
+        volume = r.get('volume_nominal', 'N/A')
+        marca = r.get('marca', 'N/A')
+        localizacao = r.get('localizacao', 'Não informada')
+        html += f'<tr><td><b>{r["nome"]}</b></td><td>{marca}</td><td>{volume}</td><td><b>{localizacao}</b></td><td><b>{r["quantidade_embalagens"]}</b></td></tr>'
+    
+    html += '</table>'
+    html += '<p style="margin-top:20px;"><a href="/">🏠 Voltar ao Menu</a></p>'
+    html += '</div>'
+    return html
+
+@app.route('/consulta', methods=['GET', 'POST'])
+def consulta():
+    """Página de consulta com abas."""
+    if 'logged_in' not in session:
+        return redirect('/login')
+    
+    aba_ativa = request.args.get('aba', 'reagentes')
+    resultados = []
+    filtro_aplicado = False
+    
+    if request.method == 'POST':
+        filtro_tipo = request.form.get('filtro_tipo', '')
+        filtro_valor = request.form.get('filtro_valor', '')
+        aba_ativa = request.form.get('aba', 'reagentes')
+        
+        if aba_ativa == 'reagentes' and filtro_tipo and filtro_valor:
+            resultados = consultar_reagentes(filtro_tipo, filtro_valor)
+            filtro_aplicado = True
+    
+    pedidos_abertos = consultar_pedidos('abertos')
+    pedidos_recebidos = consultar_pedidos('recebidos')
+    
+    html_reagentes = '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html_reagentes += '<tr style="background-color:#f0f0f0;"><th>Nome</th><th>Marca</th><th>Volume/Massa</th><th>📍 Localização</th><th>Quantidade</th></tr>'
+    
+    if aba_ativa == 'reagentes':
+        if resultados:
+            for r in resultados:
+                volume = r.get('volume_nominal', 'N/A')
+                marca = r.get('marca', 'N/A')
+                localizacao = r.get('localizacao', 'Não informada')
+                qtd_cor = 'red' if r['quantidade_embalagens'] < 5 else 'green'
+                html_reagentes += f'<tr><td><b>{r["nome"]}</b></td><td>{marca}</td><td>{volume}</td><td><b>{localizacao}</b></td><td style="color:{qtd_cor};"><b>{r["quantidade_embalagens"]}</b></td></tr>'
+        else:
+            msg = '❌ Nenhum reagente encontrado' if filtro_aplicado else 'Realize uma busca para ver resultados'
+            html_reagentes += f'<tr><td colspan="5" style="text-align:center;color:{"red" if filtro_aplicado else "gray"};">{msg}</td></tr>'
+    
+    html_reagentes += '</table>'
+    
+    html_abertos = '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html_abertos += '<tr style="background-color:#fff3cd;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
+    
+    if pedidos_abertos:
+        for p in pedidos_abertos:
+            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
+            html_abertos += f'<tr style="background-color:#fffacd;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:orange;"><b>⏳ {p["status"]}</b></td></tr>'
+    else:
+        html_abertos += '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum pedido aberto</td></tr>'
+    
+    html_abertos += '</table>'
+    
+    html_recebidos = '<table border="1" style="width:100%;border-collapse:collapse;">'
+    html_recebidos += '<tr style="background-color:#d4edda;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
+    
+    if pedidos_recebidos:
+        for p in pedidos_recebidos:
+            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
+            html_recebidos += f'<tr style="background-color:#e8f5e9;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:green;"><b>✅ {p["status"]}</b></td></tr>'
+    else:
+        html_recebidos += '<tr><td colspan="5" style="text-align:center;color:gray;">Nenhum pedido recebido ainda</td></tr>'
+    
+    html_recebidos += '</table>'
+    
+    css_aba = 'padding:12px 20px;margin-right:5px;border-radius:5px;text-decoration:none;font-weight:bold;color:white;display:inline-block;'
+    
+    return f'''
+    <div style="max-width:900px;margin:20px;padding:20px;border:1px solid #ccc;">
+        <h2>🔍 Consultas e Pedidos</h2>
+        
+        <div style="margin-bottom:25px;border-bottom:2px solid #ddd;padding-bottom:10px;">
+            <a href="/consulta?aba=reagentes" style="{css_aba}background:{'#0066cc' if aba_ativa == 'reagentes' else '#999'};">🧪 Reagentes</a>
+            <a href="/consulta?aba=abertos" style="{css_aba}background:{'#ff9800' if aba_ativa == 'abertos' else '#999'};">⏳ Pedidos Abertos ({len(pedidos_abertos)})</a>
+            <a href="/consulta?aba=recebidos" style="{css_aba}background:{'#4caf50' if aba_ativa == 'recebidos' else '#999'};">✅ Pedidos Recebidos ({len(pedidos_recebidos)})</a>
+        </div>
+        
+        {f'''<form method="post" style="margin-bottom:20px;">
+            <input type="hidden" name="aba" value="reagentes">
+            <p>
+                <label><strong>Tipo de Filtro:</strong></label><br>
+                <select name="filtro_tipo" required style="padding:8px;width:300px;">
+                    <option value="">-- Selecione um filtro --</option>
+                    <option value="nome">Por Nome</option>
+                    <option value="marca">Por Marca</option>
+                    <option value="volume">Por Volume/Massa</option>
+                    <option value="localizacao">Por Localização</option>
+                    <option value="quantidade_min">Quantidade Mínima</option>
+                    <option value="quantidade_max">Quantidade Máxima</option>
+                    <option value="critico">Estoque Crítico (&lt; 5)</option>
+                    <option value="zerado">Estoque Zerado</option>
+                </select>
+            </p>
+            
+            <p>
+                <label><strong>Valor do Filtro:</strong></label><br>
+                <input type="text" name="filtro_valor" style="width:300px;padding:8px;" placeholder="Digite o valor de busca">
+            </p>
+            
+            <p>
+                <button type="submit" style="padding:10px 20px;background:blue;color:white;cursor:pointer;border-radius:5px;">🔍 Buscar</button>
+                <button type="reset" style="padding:10px 20px;background:gray;color:white;cursor:pointer;border-radius:5px;">Limpar</button>
+            </p>
+        </form>''' if aba_ativa == 'reagentes' else ''}
+        
+        <hr>
+        
+        {f'<h3>Resultados de Reagentes ({len(resultados)}):</h3>{html_reagentes}' if aba_ativa == 'reagentes' else ''}
+        {f'<h3>Pedidos Abertos ({len(pedidos_abertos)})</h3>{html_abertos}' if aba_ativa == 'abertos' else ''}
+        {f'<h3>Pedidos Recebidos ({len(pedidos_recebidos)})</h3>{html_recebidos}' if aba_ativa == 'recebidos' else ''}
+        
+        <p style="margin-top:20px;"><a href="/">🏠 Voltar ao Menu</a></p>
+    </div>
     '''
 
 @app.route('/entrada-reagente', methods=['GET', 'POST'])
@@ -381,8 +981,6 @@ def entrada_reagente():
             'pedido_origem': pedido_feito
         }
         entradas_data.append(nova_entrada)
-        
-        # Atualizar quantidade do reagente (com normalização de acentos)
         atualizar_reagente_quantidade(nome_reagente, volume_nominal, marca, quantidade_embalagens, localizacao)
         
         return f'''
@@ -391,22 +989,18 @@ def entrada_reagente():
         <p>Marca: <b>{marca}</b></p>
         <p>Quantidade: <b>{quantidade_embalagens} embalagens</b></p>
         <p>Localização: <b>{localizacao}</b></p>
-        <p><a href="/entradas">📋 Ver Todas as Entradas</a></p>
-        <p><a href="/reagentes">🧪 Ver Reagentes Atualizados</a></p>
         <p><a href="/">🏠 Voltar ao Menu</a></p>
         '''
     
     pedidos_abertos = get_pedidos_abertos()
-    
-    # Criar options de pedidos
     options_pedidos = ""
     for p in pedidos_abertos:
         options_pedidos += f'<option value="{p["id"]}">{p["reagente"]} - {p["quantidade_nominal"]}</option>'
     
     return f'''
     <div style="max-width:600px;margin:20px;padding:20px;border:1px solid #ccc;">
-        <h2>Entrada de Reagente</h2>
-        <form method="post" id="entradaForm">
+        <h2>📦 Entrada de Reagente</h2>
+        <form method="post">
             <p>
                 <label>Data de Chegada:</label><br>
                 <input type="date" name="data_chegada" required style="padding:5px;">
@@ -432,7 +1026,7 @@ def entrada_reagente():
             
             <div id="pedidoManual" style="display:none;">
                 <p>
-                    <label>Nome do Reagente (Caso Não Seja Pedido):</label><br>
+                    <label>Nome do Reagente:</label><br>
                     <input type="text" name="nome_reagente_manual" style="width:300px;padding:5px;">
                 </p>
             </div>
@@ -443,9 +1037,8 @@ def entrada_reagente():
             </p>
             
             <p>
-                <label>Volume Nominal da Embalagem:</label><br>
-                <input type="text" name="volume_nominal" placeholder="Ex: 500ml, 1L, 250g, 2kg" required style="width:200px;padding:5px;">
-                <br><small style="color:blue;">💡 Reagentes só somam se Nome + Volume + Marca forem iguais (acentos não importam)</small>
+                <label>Volume Nominal:</label><br>
+                <input type="text" name="volume_nominal" placeholder="Ex: 500ml, 1L" required style="width:200px;padding:5px;">
             </p>
             
             <p>
@@ -455,12 +1048,11 @@ def entrada_reagente():
             
             <p>
                 <label>📍 Localização:</label><br>
-                <input type="text" name="localizacao" placeholder="Ex: Prateleira A1, Armário C3" required style="width:300px;padding:5px;">
-                <br><small style="color:green;">✓ Campo obrigatório para localizar o reagente</small>
+                <input type="text" name="localizacao" placeholder="Ex: Prateleira A1" required style="width:300px;padding:5px;">
             </p>
             
             <p>
-                <label>Reagente Controlado?</label><br>
+                <label>Controlado?</label><br>
                 <select name="controlado" style="padding:5px;">
                     <option value="Sim">Sim</option>
                     <option value="Não" selected>Não</option>
@@ -508,12 +1100,10 @@ def saida_reagente():
         volume_nominal = request.form['volume_nominal']
         quantidade_saida = int(request.form['quantidade'])
         
-        # Normalizar para busca (ignora acentos)
         nome_norm = normalizar_para_comparacao(nome_reagente)
         marca_norm = normalizar_para_comparacao(marca)
         volume_norm = normalizar_para_comparacao(volume_nominal)
         
-        # Buscar reagente específico
         reagente_encontrado = None
         for r in reagentes_data:
             if (normalizar_para_comparacao(r['nome']) == nome_norm and 
@@ -523,28 +1113,11 @@ def saida_reagente():
                 break
         
         if not reagente_encontrado:
-            return f'''
-            <h2>❌ Erro!</h2>
-            <p>Reagente não encontrado no estoque.</p>
-            <p><a href="/saida-reagente">Tentar novamente</a></p>
-            <p><a href="/">Voltar ao Menu</a></p>
-            '''
+            return '''<h2>❌ Erro!</h2><p>Reagente não encontrado.</p><p><a href="/saida-reagente">Tentar novamente</a></p><p><a href="/">Voltar</a></p>'''
         
-        # Verificar se tem quantidade suficiente
         if quantidade_saida > reagente_encontrado['quantidade_embalagens']:
-            localizacao = reagente_encontrado.get('localizacao', 'Não informada')
-            return f'''
-            <h2>❌ Quantidade Insuficiente!</h2>
-            <p>Reagente: <b>{reagente_encontrado['nome']}</b></p>
-            <p>Marca: <b>{reagente_encontrado.get('marca', 'N/A')}</b> - Volume: <b>{reagente_encontrado.get('volume_nominal', 'N/A')}</b></p>
-            <p>Localização: <b>{localizacao}</b></p>
-            <p>Disponível: <b>{reagente_encontrado['quantidade_embalagens']} embalagens</b></p>
-            <p>Solicitado: <b>{quantidade_saida} embalagens</b></p>
-            <p><a href="/saida-reagente">Tentar novamente</a></p>
-            <p><a href="/">Voltar ao Menu</a></p>
-            '''
+            return f'''<h2>❌ Quantidade Insuficiente!</h2><p>Disponível: {reagente_encontrado['quantidade_embalagens']}</p><p>Solicitado: {quantidade_saida}</p><p><a href="/saida-reagente">Tentar novamente</a></p>'''
         
-        # Registrar saída
         nova_saida = {
             'id': len(saidas_data) + 1,
             'data_saida': datetime.now().strftime('%Y-%m-%d'),
@@ -556,39 +1129,30 @@ def saida_reagente():
             'localizacao': reagente_encontrado.get('localizacao', 'N/A')
         }
         saidas_data.append(nova_saida)
-        
-        # Abater do estoque
         reagente_encontrado['quantidade_embalagens'] -= quantidade_saida
         
-        # Se zerou, remover do estoque
         if reagente_encontrado['quantidade_embalagens'] <= 0:
             reagentes_data.remove(reagente_encontrado)
-            status_estoque = "❌ Reagente ZERADO - Removido do estoque"
+            status_estoque = "❌ Reagente ZERADO"
         else:
-            status_estoque = f"✅ Restam {reagente_encontrado['quantidade_embalagens']} embalagens"
+            status_estoque = f"✅ Restam {reagente_encontrado['quantidade_embalagens']}"
         
         return f'''
         <h2>✅ Saída Registrada!</h2>
         <p>Reagente: <b>{reagente_encontrado['nome']}</b></p>
-        <p>Marca: <b>{reagente_encontrado.get('marca', 'N/A')}</b></p>
-        <p>Volume: <b>{reagente_encontrado.get('volume_nominal', 'N/A')}</b></p>
-        <p>Localização: <b>{reagente_encontrado.get('localizacao', 'N/A')}</b></p>
-        <p>Quantidade retirada: <b>{quantidade_saida} embalagens</b></p>
+        <p>Quantidade: <b>{quantidade_saida} embalagens</b></p>
         <p>{status_estoque}</p>
-        <p><a href="/saidas">📤 Ver Todas as Saídas</a></p>
-        <p><a href="/reagentes">🧪 Ver Estoque Atualizado</a></p>
-        <p><a href="/">🏠 Voltar ao Menu</a></p>
+        <p><a href="/">🏠 Voltar</a></p>
         '''
     
-    # Criar dados JavaScript dos reagentes para busca dinâmica
     reagentes_js = str(reagentes_data).replace("'", '"')
     
     return f'''
     <div style="max-width:500px;margin:20px;padding:20px;border:1px solid #ccc;">
-        <h2>Saída de Reagente</h2>
-        <form method="post" id="saidaForm">
+        <h2>➖ Saída de Reagente</h2>
+        <form method="post">
             <p>
-                <label>Nome do Reagente:</label><br>
+                <label>Nome:</label><br>
                 <input type="text" name="nome_reagente" id="nomeReagente" oninput="buscarMarcas()" required style="width:300px;padding:5px;">
             </p>
             
@@ -600,7 +1164,7 @@ def saida_reagente():
             </p>
             
             <p>
-                <label>Volume da Embalagem:</label><br>
+                <label>Volume:</label><br>
                 <select name="volume_nominal" id="volumeSelect" required style="padding:5px;width:200px;">
                     <option>Selecione um volume</option>
                 </select>
@@ -613,7 +1177,6 @@ def saida_reagente():
             
             <p>
                 <button type="submit" style="padding:8px 15px;background:red;color:white;">Registrar Saída</button>
-                <button type="reset" style="padding:8px 15px;background:gray;color:white;" onclick="limparSelects()">Fechar</button>
             </p>
         </form>
         <p><a href="/">🏠 Voltar</a></p>
@@ -622,34 +1185,21 @@ def saida_reagente():
     <script>
     var reagentes = {reagentes_js};
     
-    function limparSelects() {{
-        document.getElementById('marcaSelect').innerHTML = '<option>Selecione uma marca</option>';
-        document.getElementById('volumeSelect').innerHTML = '<option>Selecione um volume</option>';
-    }}
-    
     function buscarMarcas() {{
         var nome = document.getElementById('nomeReagente').value.toLowerCase();
         var marcaSelect = document.getElementById('marcaSelect');
-        var volumeSelect = document.getElementById('volumeSelect');
-        
-        // Limpar selects
         marcaSelect.innerHTML = '<option>Selecione uma marca</option>';
-        volumeSelect.innerHTML = '<option>Selecione um volume</option>';
         
-        if (nome.length < 2) return;
-        
-        // Buscar marcas do reagente
-        var marcasEncontradas = [];
-        
+        var marcas = [];
         reagentes.forEach(function(r) {{
             if (r.nome.toLowerCase().includes(nome)) {{
-                var marca = r.marca || 'Marca não informada';
-                if (marcasEncontradas.indexOf(marca) === -1) {{
-                    marcasEncontradas.push(marca);
-                    var option = document.createElement('option');
-                    option.value = marca;
-                    option.text = marca;
-                    marcaSelect.add(option);
+                var marca = r.marca || 'N/A';
+                if (marcas.indexOf(marca) === -1) {{
+                    marcas.push(marca);
+                    var opt = document.createElement('option');
+                    opt.value = marca;
+                    opt.text = marca;
+                    marcaSelect.add(opt);
                 }}
             }}
         }});
@@ -659,349 +1209,22 @@ def saida_reagente():
         var nome = document.getElementById('nomeReagente').value.toLowerCase();
         var marca = document.getElementById('marcaSelect').value;
         var volumeSelect = document.getElementById('volumeSelect');
-        
         volumeSelect.innerHTML = '<option>Selecione um volume</option>';
         
-        if (!nome || !marca || marca === 'Selecione uma marca') return;
-        
         reagentes.forEach(function(r) {{
-            if (r.nome.toLowerCase().includes(nome) && (r.marca || 'Marca não informada') === marca) {{
-                var option = document.createElement('option');
-                option.value = r.volume_nominal;
-                option.text = r.volume_nominal + ' (' + r.quantidade_embalagens + ' disponíveis) - ' + r.localizacao;
-                volumeSelect.add(option);
+            if (r.nome.toLowerCase().includes(nome) && (r.marca || 'N/A') === marca) {{
+                var opt = document.createElement('option');
+                opt.value = r.volume_nominal;
+                opt.text = r.volume_nominal + ' (' + r.quantidade_embalagens + ' disponíveis)';
+                volumeSelect.add(opt);
             }}
         }});
     }}
     </script>
     '''
 
-@app.route('/entradas')
-def entradas():
-    if 'logged_in' not in session:
-        return redirect('/login')
-    
-    html = '<h2>📦 Entradas de Reagentes</h2>'
-    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>Data</th><th>Reagente</th><th>Marca</th><th>Volume/Massa</th><th>Qtd Emb.</th><th>📍 Localização</th><th>Controlado</th><th>Validade</th></tr>'
-    
-    for e in entradas_data:
-        validade = e.get('data_validade', '') or 'N/A'
-        controlado_cor = 'red' if e.get('controlado') == 'Sim' else 'green'
-        html += f'<tr>'
-        html += f'<td>{e["data_chegada"]}</td>'
-        html += f'<td><b>{e["nome_reagente"]}</b></td>'
-        html += f'<td>{e["marca"]}</td>'
-        html += f'<td>{e["volume_nominal"]}</td>'
-        html += f'<td><b>{e["quantidade_embalagens"]}</b></td>'
-        html += f'<td><b>{e.get("localizacao", "N/A")}</b></td>'
-        html += f'<td style="color:{controlado_cor}"><b>{e.get("controlado", "Não")}</b></td>'
-        html += f'<td>{validade}</td>'
-        html += f'</tr>'
-    
-    html += '</table>'
-    html += '<p><a href="/entrada-reagente">➕ Nova Entrada</a></p>'
-    html += '<p><a href="/">🏠 Voltar</a></p>'
-    return html
-
-@app.route('/saidas')
-def saidas():
-    if 'logged_in' not in session:
-        return redirect('/login')
-    
-    html = '<h2>📤 Saídas de Reagentes</h2>'
-    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>Data</th><th>Reagente</th><th>Marca</th><th>Volume</th><th>📍 Localização</th><th>Qtd Retirada</th><th>Usuário</th></tr>'
-    
-    for s in saidas_data:
-        html += f'<tr>'
-        html += f'<td>{s["data_saida"]}</td>'
-        html += f'<td><b>{s["nome_reagente"]}</b></td>'
-        html += f'<td>{s["marca"]}</td>'
-        html += f'<td>{s["volume_nominal"]}</td>'
-        html += f'<td><b>{s.get("localizacao", "N/A")}</b></td>'
-        html += f'<td><b style="color:red">{s["quantidade_saida"]} embalagens</b></td>'
-        html += f'<td>{s["usuario"]}</td>'
-        html += f'</tr>'
-    
-    html += '</table>'
-    html += '<p><a href="/saida-reagente">➖ Nova Saída</a></p>'
-    html += '<p><a href="/">🏠 Voltar</a></p>'
-    return html
-
-@app.route('/reagentes')
-def reagentes():
-    if 'logged_in' not in session:
-        return redirect('/login')
-    
-    html = '<h2>🧪 Reagentes em Estoque</h2>'
-    html += '<p><small>📦 <strong>Quantidade</strong> = Número total de embalagens</small></p>'
-    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>Nome do Reagente</th><th>Marca</th><th>Volume/Massa Nominal</th><th>📍 Localização</th><th>Quantidade Total</th></tr>'
-    
-    for r in reagentes_data:
-        volume = r.get('volume_nominal', 'N/A')
-        marca = r.get('marca', 'N/A')
-        localizacao = r.get('localizacao', 'Não informada')
-        html += f'<tr>'
-        html += f'<td><b>{r["nome"]}</b></td>'
-        html += f'<td>{marca}</td>'
-        html += f'<td>{volume}</td>'
-        html += f'<td><b>{localizacao}</b></td>'
-        html += f'<td><b>{r["quantidade_embalagens"]} embalagens</b></td>'
-        html += f'</tr>'
-    
-    html += '</table>'
-    html += '<p><small>💡 Reagentes são somados apenas se Nome + Marca + Volume forem iguais (acentos não importam)</small></p>'
-    html += '<p><a href="/">🏠 Voltar</a></p>'
-    return html
-
-@app.route('/consulta', methods=['GET', 'POST'])
-def consulta():
-    """Página de consulta com abas: Reagentes, Pedidos Abertos e Pedidos Recebidos."""
-    if 'logged_in' not in session:
-        return redirect('/login')
-    
-    aba_ativa = request.args.get('aba', 'reagentes')
-    resultados = []
-    filtro_aplicado = False
-    
-    if request.method == 'POST':
-        filtro_tipo = request.form.get('filtro_tipo', '')
-        filtro_valor = request.form.get('filtro_valor', '')
-        aba_ativa = request.form.get('aba', 'reagentes')
-        
-        if aba_ativa == 'reagentes' and filtro_tipo and filtro_valor:
-            resultados = consultar_reagentes(filtro_tipo, filtro_valor)
-            filtro_aplicado = True
-    
-    # Dados para as abas
-    pedidos_abertos = consultar_pedidos('abertos')
-    pedidos_recebidos = consultar_pedidos('recebidos')
-    
-    # HTML para ABA REAGENTES
-    html_reagentes = '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html_reagentes += '<tr style="background-color:#f0f0f0;"><th>Nome</th><th>Marca</th><th>Volume/Massa</th><th>📍 Localização</th><th>Quantidade</th></tr>'
-    
-    if aba_ativa == 'reagentes':
-        if resultados:
-            for r in resultados:
-                volume = r.get('volume_nominal', 'N/A')
-                marca = r.get('marca', 'N/A')
-                localizacao = r.get('localizacao', 'Não informada')
-                qtd_cor = 'red' if r['quantidade_embalagens'] < 5 else 'green'
-                html_reagentes += f'<tr><td><b>{r["nome"]}</b></td><td>{marca}</td><td>{volume}</td><td><b>{localizacao}</b></td><td style="color:{qtd_cor};"><b>{r["quantidade_embalagens"]}</b></td></tr>'
-        else:
-            msg = '❌ Nenhum reagente encontrado' if filtro_aplicado else 'Realize uma busca para ver resultados'
-            html_reagentes += f'<tr><td colspan="5" style="text-align:center;color:{"red" if filtro_aplicado else "gray"};">{msg}</td></tr>'
-    
-    html_reagentes += '</table>'
-    
-    # HTML para ABA PEDIDOS ABERTOS
-    html_abertos = '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html_abertos += '<tr style="background-color:#fff3cd;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
-    
-    if pedidos_abertos:
-        for p in pedidos_abertos:
-            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
-            html_abertos += f'<tr style="background-color:#fffacd;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:orange;"><b>⏳ {p["status"]}</b></td></tr>'
-    else:
-        html_abertos += '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum pedido aberto</td></tr>'
-    
-    html_abertos += '</table>'
-    
-    # HTML para ABA PEDIDOS RECEBIDOS
-    html_recebidos = '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html_recebidos += '<tr style="background-color:#d4edda;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
-    
-    if pedidos_recebidos:
-        for p in pedidos_recebidos:
-            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
-            html_recebidos += f'<tr style="background-color:#e8f5e9;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:green;"><b>✅ {p["status"]}</b></td></tr>'
-    else:
-        html_recebidos += '<tr><td colspan="5" style="text-align:center;color:gray;">Nenhum pedido recebido ainda</td></tr>'
-    
-    html_recebidos += '</table>'
-    
-    # CSS para abas
-    css_aba = 'padding:12px 20px;margin-right:5px;border-radius:5px;text-decoration:none;font-weight:bold;color:white;display:inline-block;'
-    
-    return f'''
-    <div style="max-width:900px;margin:20px;padding:20px;border:1px solid #ccc;">
-        <h2>🔍 Consultas e Pedidos</h2>
-        
-        <div style="margin-bottom:25px;border-bottom:2px solid #ddd;padding-bottom:10px;">
-            <a href="/consulta?aba=reagentes" style="{css_aba}background:{'#0066cc' if aba_ativa == 'reagentes' else '#999'};">🧪 Reagentes</a>
-            <a href="/consulta?aba=abertos" style="{css_aba}background:{'#ff9800' if aba_ativa == 'abertos' else '#999'};">⏳ Pedidos Abertos ({len(pedidos_abertos)})</a>
-            <a href="/consulta?aba=recebidos" style="{css_aba}background:{'#4caf50' if aba_ativa == 'recebidos' else '#999'};">✅ Pedidos Recebidos ({len(pedidos_recebidos)})</a>
-        </div>
-        
-        {f'''<form method="post" style="margin-bottom:20px;">
-            <input type="hidden" name="aba" value="reagentes">
-            <p>
-                <label><strong>Tipo de Filtro:</strong></label><br>
-                <select name="filtro_tipo" required style="padding:8px;width:300px;">
-                    <option value="">-- Selecione um filtro --</option>
-                    <option value="nome">Por Nome</option>
-                    <option value="marca">Por Marca</option>
-                    <option value="volume">Por Volume/Massa</option>
-                    <option value="localizacao">Por Localização</option>
-                    <option value="quantidade_min">Quantidade Mínima</option>
-                    <option value="quantidade_max">Quantidade Máxima</option>
-                    <option value="critico">Estoque Crítico (&lt; 5)</option>
-                    <option value="zerado">Estoque Zerado</option>
-                </select>
-            </p>
-            
-            <p>
-                <label><strong>Valor do Filtro:</strong></label><br>
-                <input type="text" name="filtro_valor" style="width:300px;padding:8px;" placeholder="Digite o valor de busca">
-                <small style="display:block;margin-top:5px;color:blue;">💡 Para 'Estoque Crítico' e 'Zerado', deixe este campo vazio</small>
-                <small style="display:block;margin-top:5px;color:green;">✓ Acentos não importam (Ácido = Acido)</small>
-            </p>
-            
-            <p>
-                <button type="submit" style="padding:10px 20px;background:blue;color:white;cursor:pointer;border-radius:5px;">🔍 Buscar</button>
-                <button type="reset" style="padding:10px 20px;background:gray;color:white;cursor:pointer;border-radius:5px;">Limpar</button>
-            </p>
-        </form>''' if aba_ativa == 'reagentes' else ''}
-        
-        <hr>
-        
-        {f'<h3>Resultados de Reagentes ({len(resultados)}):</h3>{html_reagentes}' if aba_ativa == 'reagentes' else ''}
-        {f'<h3>Pedidos Abertos ({len(pedidos_abertos)})</h3>{html_abertos}' if aba_ativa == 'abertos' else ''}
-        {f'<h3>Pedidos Recebidos ({len(pedidos_recebidos)})</h3>{html_recebidos}' if aba_ativa == 'recebidos' else ''}
-        
-        <p style="margin-top:20px;"><a href="/">🏠 Voltar ao Menu</a></p>
-    </div>
-    '''
-
-@app.route('/relatorio')
-def relatorio():
-    """Exibe relatório de estoque com estatísticas, localização e pedidos."""
-    if 'logged_in' not in session:
-        return redirect('/login')
-    
-    relatorio_estoque = gerar_relatorio_estoque()
-    relatorio_pedidos = gerar_relatorio_pedidos()
-    por_localizacao = consultar_estoque_por_localizacao()
-    
-    # Itens críticos
-    html_criticos = '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum item crítico</td></tr>'
-    if relatorio_estoque['itens_criticos']:
-        html_criticos = ''
-        for r in relatorio_estoque['itens_criticos']:
-            html_criticos += f'<tr style="background-color:#ffe6e6;"><td><b>{r["nome"]}</b></td><td>{r.get("marca", "N/A")}</td><td>{r.get("volume_nominal", "N/A")}</td><td><b>{r.get("localizacao", "N/A")}</b></td><td style="color:red;"><b>{r["quantidade_embalagens"]}</b></td></tr>'
-    
-    # Itens zerados
-    html_zerados = '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum item zerado</td></tr>'
-    if relatorio_estoque['itens_zerados']:
-        html_zerados = ''
-        for r in relatorio_estoque['itens_zerados']:
-            html_zerados += f'<tr style="background-color:#ffcccc;"><td><b>{r["nome"]}</b></td><td>{r.get("marca", "N/A")}</td><td>{r.get("volume_nominal", "N/A")}</td><td><b>{r.get("localizacao", "N/A")}</b></td><td style="color:darkred;"><b>0</b></td></tr>'
-    
-    # Pedidos abertos
-    html_pedidos_abertos = '<tr><td colspan="5" style="text-align:center;color:green;">✅ Nenhum pedido aberto</td></tr>'
-    if relatorio_pedidos['pedidos_abertos']:
-        html_pedidos_abertos = ''
-        for p in relatorio_pedidos['pedidos_abertos']:
-            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
-            html_pedidos_abertos += f'<tr style="background-color:#fffacd;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:orange;"><b>⏳ {p["status"]}</b></td></tr>'
-    
-    # Pedidos recebidos
-    html_pedidos_recebidos = '<tr><td colspan="5" style="text-align:center;color:gray;">Nenhum pedido recebido ainda</td></tr>'
-    if relatorio_pedidos['pedidos_recebidos']:
-        html_pedidos_recebidos = ''
-        for p in relatorio_pedidos['pedidos_recebidos']:
-            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
-            html_pedidos_recebidos += f'<tr style="background-color:#e8f5e9;"><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td><td style="color:green;"><b>✅ {p["status"]}</b></td></tr>'
-    
-    # Reagentes por localização
-    html_por_localizacao = ''
-    for localizacao, reagentes in sorted(por_localizacao.items()):
-        total_qtd = sum(r['quantidade_embalagens'] for r in reagentes)
-        html_por_localizacao += f'<h4>📍 {localizacao} ({len(reagentes)} itens)</h4>'
-        html_por_localizacao += '<table border="1" style="width:100%;border-collapse:collapse;margin-bottom:10px;">'
-        html_por_localizacao += '<tr><th>Reagente</th><th>Marca</th><th>Volume</th><th>Quantidade</th></tr>'
-        for r in reagentes:
-            html_por_localizacao += f'<tr><td>{r["nome"]}</td><td>{r.get("marca", "N/A")}</td><td>{r.get("volume_nominal", "N/A")}</td><td><b>{r["quantidade_embalagens"]}</b></td></tr>'
-        html_por_localizacao += '</table>'
-    
-    item_maior = relatorio_estoque['item_com_maior_estoque']
-    maior_nome = f"{item_maior['nome']} ({item_maior.get('localizacao', 'N/A')}) - {item_maior['quantidade_embalagens']} unidades" if item_maior else "N/A"
-    
-    return f'''
-    <div style="margin:20px;padding:20px;">
-        <h2>📊 Relatório Completo</h2>
-        
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:30px;">
-            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f0f7ff;">
-                <h3 style="margin:0;">📦 Total de Itens</h3>
-                <p style="font-size:24px;color:blue;font-weight:bold;margin:10px 0;">{relatorio_estoque["total_itens"]}</p>
-            </div>
-            
-            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#f0fff4;">
-                <h3 style="margin:0;">📊 Total de Embalagens</h3>
-                <p style="font-size:24px;color:green;font-weight:bold;margin:10px 0;">{relatorio_estoque["total_embalagens"]}</p>
-            </div>
-            
-            <div style="border:1px solid #ddd;padding:15px;border-radius:5px;background:#faf5ff;">
-                <h3 style="margin:0;">📈 Média de Estoque</h3>
-                <p style="font-size:24px;color:purple;font-weight:bold;margin:10px 0;">{relatorio_estoque["media_embalagens"]}</p>
-            </div>
-        </div>
-        
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:30px;">
-            <div style="border:1px solid #ff9800;padding:15px;border-radius:5px;background:#fff3e0;">
-                <h3 style="margin:0;">⏳ Pedidos Abertos</h3>
-                <p style="font-size:24px;color:#ff9800;font-weight:bold;margin:10px 0;">{relatorio_pedidos["total_abertos"]}</p>
-            </div>
-            
-            <div style="border:1px solid #4caf50;padding:15px;border-radius:5px;background:#f1f8e9;">
-                <h3 style="margin:0;">✅ Pedidos Recebidos</h3>
-                <p style="font-size:24px;color:#4caf50;font-weight:bold;margin:10px 0;">{relatorio_pedidos["total_recebidos"]}</p>
-            </div>
-        </div>
-        
-        <h3>⚠️ Itens com Estoque Crítico (&lt; 5)</h3>
-        <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-            <tr style="background-color:#ffcccc;"><th>Nome</th><th>Marca</th><th>Volume</th><th>📍 Localização</th><th>Quantidade</th></tr>
-            {html_criticos}
-        </table>
-        
-        <h3>❌ Itens com Estoque Zerado</h3>
-        <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-            <tr style="background-color:#ffcccc;"><th>Nome</th><th>Marca</th><th>Volume</th><th>📍 Localização</th><th>Quantidade</th></tr>
-            {html_zerados}
-        </table>
-        
-        <h3>⏳ Pedidos Abertos ({relatorio_pedidos["total_abertos"]})</h3>
-        <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-            <tr style="background-color:#fff3cd;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>
-            {html_pedidos_abertos}
-        </table>
-        
-        <h3>✅ Pedidos Recebidos ({relatorio_pedidos["total_recebidos"]})</h3>
-        <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-            <tr style="background-color:#d4edda;"><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>
-            {html_pedidos_recebidos}
-        </table>
-        
-        <div style="background:#e6f2ff;padding:15px;border-radius:5px;margin-top:20px;margin-bottom:20px;">
-            <h3 style="margin-top:0;">🏆 Item com Maior Estoque</h3>
-            <p style="font-size:16px;">{maior_nome}</p>
-        </div>
-        
-        <h3>📍 Reagentes por Localização</h3>
-        {html_por_localizacao}
-        
-        <p><a href="/">🏠 Voltar ao Menu</a></p>
-    </div>
-    '''
-
 @app.route('/novo-pedido', methods=['GET', 'POST'])
 def novo_pedido():
-    """Criar um novo pedido de reagente."""
     if 'logged_in' not in session:
         return redirect('/login')
     
@@ -1021,135 +1244,83 @@ def novo_pedido():
         }
         pedidos_data.append(novo_pedido)
         
-        return f'''
-        <h2>✅ Pedido Criado!</h2>
-        <p>Reagente: <b>{nome_reagente}</b></p>
-        <p>Quantidade: <b>{quantidade_nominal}</b></p>
-        <p>Data: {data_pedido}</p>
-        <p>Controlado: {controlado}</p>
-        <p><a href="/pedidos">📝 Ver Todos os Pedidos</a></p>
-        <p><a href="/">🏠 Voltar ao Menu</a></p>
-        '''
+        return f'<h2>✅ Pedido Criado!</h2><p>Reagente: <b>{nome_reagente}</b></p><p><a href="/pedidos">Ver Pedidos</a></p><p><a href="/">Voltar</a></p>'
     
     return '''
-    <div style="max-width:500px;margin:20px;padding:20px;border:1px solid #ccc;border-radius:5px;">
-        <h2>📝 Novo Pedido de Reagente</h2>
+    <div style="max-width:500px;margin:20px;padding:20px;border:1px solid #ccc;">
+        <h2>📝 Novo Pedido</h2>
         <form method="post">
             <p>
-                <label><strong>Nome do Reagente:</strong></label><br>
-                <input type="text" name="nome_reagente" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+                <label>Nome:</label><br>
+                <input type="text" name="nome_reagente" required style="width:300px;padding:5px;">
             </p>
             <p>
-                <label><strong>Quantidade Nominal:</strong></label><br>
-                <input type="text" name="quantidade_nominal" placeholder="Ex: 500ml, 1L, 250g, 2kg" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+                <label>Quantidade:</label><br>
+                <input type="text" name="quantidade_nominal" required style="width:200px;padding:5px;">
             </p>
             <p>
-                <label><strong>Data do Pedido:</strong></label><br>
-                <input type="date" name="data_pedido" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+                <label>Data:</label><br>
+                <input type="date" name="data_pedido" required style="padding:5px;">
             </p>
             <p>
-                <label><strong>Reagente Controlado?</strong></label><br>
-                <select name="controlado" style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+                <label>Controlado?</label><br>
+                <select name="controlado" style="padding:5px;">
                     <option value="Sim">Sim</option>
                     <option value="Não" selected>Não</option>
                 </select>
             </p>
             <p>
-                <button type="submit" style="padding:10px 20px;background:green;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">✅ Salvar Pedido</button>
-                <button type="reset" style="padding:10px 20px;background:gray;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;margin-left:10px;">🔄 Limpar</button>
+                <button type="submit" style="padding:8px 15px;background:green;color:white;">Salvar</button>
             </p>
         </form>
-        <p><a href="/">🏠 Voltar</a></p>
+        <p><a href="/">Voltar</a></p>
     </div>
     '''
 
 @app.route('/pedidos')
 def pedidos():
-    """Visualizar todos os pedidos."""
     if 'logged_in' not in session:
         return redirect('/login')
     
-    html = '<div style="margin:20px;padding:20px;">'
-    html += '<h2>📝 Pedidos de Reagentes</h2>'
-    html += '<table border="1" style="width:100%;border-collapse:collapse;">'
-    html += '<tr style="background-color:#f0f0f0;"><th>ID</th><th>Reagente</th><th>Quantidade</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
+    html = '<div style="margin:20px;padding:20px;"><h2>📝 Pedidos</h2><table border="1" style="width:100%;border-collapse:collapse;"><tr><th>ID</th><th>Reagente</th><th>Qtd</th><th>Data</th><th>Controlado</th><th>Status</th></tr>'
     
-    if pedidos_data:
-        for p in pedidos_data:
-            status_cor = 'green' if p['status'] == 'Finalizado' else 'orange'
-            controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
-            status_emoji = '✅' if p['status'] == 'Finalizado' else '⏳'
-            html += f'<tr>'
-            html += f'<td><b>#{p["id"]}</b></td>'
-            html += f'<td><b>{p["reagente"]}</b></td>'
-            html += f'<td>{p["quantidade_nominal"]}</td>'
-            html += f'<td>{p["data"]}</td>'
-            html += f'<td style="color:{controlado_cor};"><b>{p["controlado"]}</b></td>'
-            html += f'<td style="color:{status_cor};"><b>{status_emoji} {p["status"]}</b></td>'
-            html += f'</tr>'
-    else:
-        html += '<tr><td colspan="6" style="text-align:center;color:gray;">Nenhum pedido registrado</td></tr>'
+    for p in pedidos_data:
+        status_cor = 'green' if p['status'] == 'Finalizado' else 'orange'
+        controlado_cor = 'red' if p['controlado'] == 'Sim' else 'green'
+        html += f'<tr><td>#{p["id"]}</td><td><b>{p["reagente"]}</b></td><td>{p["quantidade_nominal"]}</td><td>{p["data"]}</td><td style="color:{controlado_cor};">{p["controlado"]}</td><td style="color:{status_cor};">{p["status"]}</td></tr>'
     
-    html += '</table>'
-    html += '<p style="margin-top:20px;"><a href="/novo-pedido">➕ Novo Pedido</a></p>'
-    html += '<p><a href="/">🏠 Voltar ao Menu</a></p>'
-    html += '</div>'
+    html += '</table><p style="margin-top:20px;"><a href="/novo-pedido">Novo Pedido</a></p><p><a href="/">Voltar</a></p></div>'
     return html
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    """Página de login do sistema."""
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        if username == 'admin' and password == 'admin123':
-            session['logged_in'] = True
-            return redirect('/')
-        else:
-            erro = '❌ Usuário ou senha incorretos!'
-            return f'''
-            <div style="max-width:400px;margin:50px auto;padding:20px;border:1px solid #ccc;border-radius:5px;">
-                <form method="post">
-                    <h2>🔐 Login Sistema</h2>
-                    <p style="color:red;font-weight:bold;">{erro}</p>
-                    <p>Usuário: <input name="username" required style="width:100%;padding:8px;box-sizing:border-box;"></p>
-                    <p>Senha: <input type="password" name="password" required style="width:100%;padding:8px;box-sizing:border-box;"></p>
-                    <button style="width:100%;padding:10px;background:blue;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">Entrar</button>
-                </form>
-                <p style="text-align:center;margin-top:15px;"><small>Use: <b>admin</b> / <b>admin123</b></small></p>
-            </div>
-            '''
+@app.route('/relatorio')
+def relatorio():
+    if 'logged_in' not in session:
+        return redirect('/login')
     
-    return '''
-    <div style="max-width:400px;margin:50px auto;padding:20px;border:1px solid #ccc;border-radius:5px;box-shadow:0 2px 5px rgba(0,0,0,0.1);">
-        <form method="post">
-            <h2 style="text-align:center;">🔐 Login Sistema de Reagentes</h2>
-            <p>
-                <label style="font-weight:bold;">Usuário:</label><br>
-                <input name="username" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
-            </p>
-            <p>
-                <label style="font-weight:bold;">Senha:</label><br>
-                <input type="password" name="password" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
-            </p>
-            <button style="width:100%;padding:10px;background:blue;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;font-size:16px;">Entrar</button>
-        </form>
-        <p style="text-align:center;margin-top:20px;color:#666;"><small>Credenciais de teste:</small></p>
-        <p style="text-align:center;background:#f0f0f0;padding:10px;border-radius:3px;font-family:monospace;">
-            👤 <b>admin</b><br>
-            🔑 <b>admin123</b>
-        </p>
+    rel_estoque = gerar_relatorio_estoque()
+    rel_pedidos = gerar_relatorio_pedidos()
+    
+    html = f'''
+    <div style="margin:20px;padding:20px;">
+        <h2>📊 Relatório Completo</h2>
+        <h3>Estoque:</h3>
+        <p>Total de Itens: <b>{rel_estoque["total_itens"]}</b></p>
+        <p>Total de Embalagens: <b>{rel_estoque["total_embalagens"]}</b></p>
+        <p>Média: <b>{rel_estoque["media_embalagens"]}</b></p>
+        
+        <h3>Pedidos:</h3>
+        <p>Abertos: <b>{rel_pedidos["total_abertos"]}</b></p>
+        <p>Recebidos: <b>{rel_pedidos["total_recebidos"]}</b></p>
+        
+        <h3>Itens Críticos (&lt; 5):</h3>
+        {len(rel_estoque["itens_criticos"])} item(ns)
+        
+        <p><a href="/">Voltar</a></p>
     </div>
     '''
-
-@app.route('/logout')
-def logout():
-    """Logout do sistema."""
-    session.clear()
-    return redirect('/login')
+    return html
 
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)
