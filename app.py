@@ -998,3 +998,61 @@ def relatorio():
         <p><a href="/">🏠 Voltar ao Menu</a></p>
     </div>
     '''
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Página de login do sistema."""
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        if username == 'admin' and password == 'admin123':
+            session['logged_in'] = True
+            return redirect('/')
+        else:
+            erro = '❌ Usuário ou senha incorretos!'
+            return f'''
+            <div style="max-width:400px;margin:50px auto;padding:20px;border:1px solid #ccc;border-radius:5px;">
+                <form method="post">
+                    <h2>🔐 Login Sistema</h2>
+                    <p style="color:red;font-weight:bold;">{erro}</p>
+                    <p>Usuário: <input name="username" required style="width:100%;padding:8px;box-sizing:border-box;"></p>
+                    <p>Senha: <input type="password" name="password" required style="width:100%;padding:8px;box-sizing:border-box;"></p>
+                    <button style="width:100%;padding:10px;background:blue;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">Entrar</button>
+                </form>
+                <p style="text-align:center;margin-top:15px;"><small>Use: <b>admin</b> / <b>admin123</b></small></p>
+            </div>
+            '''
+    
+    return '''
+    <div style="max-width:400px;margin:50px auto;padding:20px;border:1px solid #ccc;border-radius:5px;box-shadow:0 2px 5px rgba(0,0,0,0.1);">
+        <form method="post">
+            <h2 style="text-align:center;">🔐 Login Sistema de Reagentes</h2>
+            <p>
+                <label style="font-weight:bold;">Usuário:</label><br>
+                <input name="username" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+            </p>
+            <p>
+                <label style="font-weight:bold;">Senha:</label><br>
+                <input type="password" name="password" required style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:3px;margin-top:5px;">
+            </p>
+            <button style="width:100%;padding:10px;background:blue;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;font-size:16px;">Entrar</button>
+        </form>
+        <p style="text-align:center;margin-top:20px;color:#666;"><small>Credenciais de teste:</small></p>
+        <p style="text-align:center;background:#f0f0f0;padding:10px;border-radius:3px;font-family:monospace;">
+            👤 <b>admin</b><br>
+            🔑 <b>admin123</b>
+        </p>
+    </div>
+    '''
+
+@app.route('/logout')
+def logout():
+    """Logout do sistema."""
+    session.clear()
+    return redirect('/login')
+
+if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
