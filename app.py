@@ -580,9 +580,9 @@ def home():
     <body>
         <div class="header">
             <div class="header-left">
-                <div class="logo">🔬 FEQ</div>
+                <div class="logo">🔬 LERP/FEQ</div>
                 <div class="header-title">
-                    <h1>Faculdade de Engenharia Química</h1>
+                    <h1>Laboratório de Engenharia de Reações Poliméricas</h1>
                     <p>Sistema de Gestão do Laboratório</p>
                 </div>
             </div>
@@ -644,8 +644,8 @@ def home():
         </div>
         
         <div class="footer">
-            <p>© 2024 Sistema de Gestão de Reagentes - Faculdade de Engenharia Química | Unicamp</p>
-            <p>Desenvolvido com ❤️ para melhorar a eficiência do laboratório</p>
+            <p>© 2024 Sistema de Gestão de Laboratório - LERP/Faculdade de Engenharia Química | Unicamp</p>
+            <p>Desenvolvido para melhorar a eficiência do laboratório</p>
         </div>
     </body>
     </html>
@@ -785,7 +785,7 @@ def login():
             <body>
                 <div class="login-container">
                     <div class="login-header">
-                        <h1>🔐 Login</h1>
+                        <h1> Login</h1>
                         <p>Intranet do Laboratório - FEQ</p>
                     </div>
                     
@@ -930,8 +930,8 @@ def login():
     <body>
         <div class="login-container">
             <div class="login-header">
-                <h1>🔐 Login</h1>
-                <p>Intranet do Laboratório - FEQ</p>
+                <h1> Login</h1>
+                <p>Intranet do Laboratório - LERP/FEQ</p>
             </div>
             
             <form method="post">
